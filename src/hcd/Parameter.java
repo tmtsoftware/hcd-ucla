@@ -68,6 +68,37 @@ public class Parameter {
 		}
 	}
 	/**
+	 * Convert a String value of this Parameter into a Object value
+	 * @param s
+	 * @return
+	 * @throws InvalidParameterException
+	 */
+	public Object stringToObject(String s) throws InvalidParameterException {
+		try {
+			if(type.equals("int")){
+				return Integer.parseInt(s);
+			}else if (type.equals("double")){
+				return Double.parseDouble(s);
+			}else if (type.equals("char")) {
+				if(s.length()==1){
+					return s.charAt(0);
+				}
+				else{
+					throw new NumberFormatException();
+				}
+			}else if (type.equals("date")){
+				SimpleDateFormat dtf = new SimpleDateFormat(dateFormat);
+				return dtf.parse(s,new ParsePosition(0));
+			}else{
+				return s;
+			}
+		// possible exception in this try block is format exception.
+		// catch it, and throw new invalid parameter exception with some more detail.
+		} catch (Exception e) {
+			throw new InvalidParameterException(String.format("For %s, %s was entered for type of %s.",name, s, type));
+		}
+	}
+	/**
 	 * Check if the param is within the range of values configured by JSON.
 	 * @param param
 	 * @return
@@ -140,46 +171,34 @@ public class Parameter {
 		// 2 if no range is in config, there is no limit. so return true.
 		else{return true;}
 	}
-	
+	/**
+	 * Return the name of Parameter
+	 * @return
+	 */
 	public String getName(){
 		return name;
 	}
+	/**
+	 * Return the type of Parameter
+	 * @return
+	 */
 	public String getType(){
 		return type;
 	}
+	/**
+	 * Return the regex string how the hardware will format the value
+	 * @return
+	 */
 	public String getDataFormat(){
 		return dataFormat;
 	}
-
-
-	
-	// parse the input string into an object according to its configured type.
-	public Object stringToObject(String s) throws InvalidParameterException {
-		try {
-			if(type.equals("int")){
-				return Integer.parseInt(s);
-			}else if (type.equals("double")){
-				return Double.parseDouble(s);
-			}else if (type.equals("char")) {
-				if(s.length()==1){
-					return s.charAt(0);
-				}
-				else{
-					throw new NumberFormatException();
-				}
-			}else if (type.equals("date")){
-				SimpleDateFormat dtf = new SimpleDateFormat(dateFormat);
-				return dtf.parse(s,new ParsePosition(0));
-			}else{
-				return s;
-			}
-		// possible exception in this try block is format exception.
-		// catch it, and throw new invalid parameter exception with some more detail.
-		} catch (Exception e) {
-			throw new InvalidParameterException(String.format("For %s, %s was entered for type of %s.",name, s, type));
-		}
-	}
+	/**
+	 * Return the description about the Parameter
+	 * @return
+	 */
 	public String getDescription(){
 		return description;
 	}
+	
+	
 }
