@@ -3,7 +3,7 @@ hcd-ucla
 
 HCD code from UCLA
 
-So basically, Commander class is the class that communicates to the devices
+Commander class is the class that communicates to the devices
 using pre-configured Command objects and Parameter objects read from JSON file.
 Also in JSON file, there are socket communicating informations such as address, port, timeout, terminators, etc.
 Each JSON file will hold information for one device. 
