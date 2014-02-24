@@ -14,6 +14,8 @@ The socket connection will stay connected until disconnect() method is called.
 After connection is established with the device, one of the three methods and their overloaded methods can be used to communicate with the device.
 
 sendCommand(String) - used for command that does not expect any response.
+
 sendRequest(String,int) - used for command that requests some kind of response.
+
 submit(String, ArrayList<Object>) - main method that has ability to distinguish command and request, as well as output formatting.
 
