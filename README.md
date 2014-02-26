@@ -17,5 +17,5 @@ sendCommand(String) - used for command that does not expect any response.
 
 sendRequest(String,int) - used for command that requests some kind of response.
 
-submit(String, ArrayList<Object>) - main method that has ability to distinguish command and request, as well as output formatting.
+submit(String, ArrayList<Object>) - key method that has ability to distinguish command and request, as well as output formatting.
 
