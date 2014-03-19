@@ -1,11 +1,13 @@
 package hcd;
 
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.Writer;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
@@ -20,6 +22,8 @@ public class Commander {
 	
 	// name of the hardware
 	private String name;
+	// type of Connection udp or tcp
+	private String connection;
 	// host and port information of the terminal server
 	private String host;
 	private int port;
@@ -41,11 +45,15 @@ public class Commander {
 	private HashMap<String, Command> commandMap;
 	private HashMap<String, Parameter> paramMap;
 	
-	// socket and I/O. used Writer instead of PrintWriter 
+	// TCP socket and I/O. used Writer instead of PrintWriter 
 	// because JSON gives error with PrintWriter
-	private Socket socket;
+	private Socket tcpSocket;
 	private Writer out;
 	private BufferedReader in;
+	
+	// UDP socket and I/O.
+	private DatagramSocket udpSocket;
+	
 	// boolean monitoring socket connection status
 	public boolean connected = false;
 	// Log4J logger. (might change to custom logging) 
@@ -63,16 +71,22 @@ public class Commander {
 	 */
 	public void connect() throws UnknownHostException, IOException{
 		if(!connected){
-			logger.debug("Opening socket on {} port {}", host, port);
-			socket = new Socket(host, port);
+			if(connection.equalsIgnoreCase("tcp")){
+				logger.debug("Opening TCP socket on {} port {}", host, port);
+				tcpSocket = new Socket(host, port);
 
-			logger.debug("Socket Timeout set to {} milliseconds.", timeout);
-			socket.setSoTimeout(timeout);
+				logger.debug("Socket Timeout set to {} milliseconds.", timeout);
+				tcpSocket.setSoTimeout(timeout);
 
-			logger.debug("Opening I/O stream");
-			out = new PrintWriter(socket.getOutputStream(), true);
-			in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-			connected = true;
+				logger.debug("Opening I/O stream");
+				out = new PrintWriter(tcpSocket.getOutputStream(), true);
+				in = new BufferedReader(new InputStreamReader(tcpSocket.getInputStream()));
+				connected = true;
+			}else if (connection.equalsIgnoreCase("udp")){
+				udpSocket = new DatagramSocket();
+			}else {
+				logger.debug("No proper connection type is in JSON configuration file");
+			}
 		} else {
 			System.out.format("Already connected to %s, port %d", host, port);
 		}
@@ -88,7 +102,7 @@ public class Commander {
 			out.close();
 			in.close();
 			logger.debug("Closing socket on {} port {}", host, port);
-			socket.close();
+			tcpSocket.close();
 			connected = false;
 		} else {
 			System.out.format("Not connected to %s, port %d", host, port);
@@ -103,7 +117,13 @@ public class Commander {
 	 */
 	public void sendCommand(String commandString) throws UnknownHostException, IOException{
 		logger.debug("Sending command, {}", commandString);
-		((PrintWriter) out).print(commandString + commandTerminator);
+		if(connection.equalsIgnoreCase("tcp")){
+			((PrintWriter) out).print(commandString + commandTerminator);
+		}else if(connection.equalsIgnoreCase("udp")){
+			byte[] data = commandString.getBytes();
+			DatagramPacket packSent = new DatagramPacket(data, data.length, InetAddress.getByName(host), port);
+			udpSocket.send(packSent);
+		}
 	}
 	
 	/**
@@ -124,71 +144,76 @@ public class Commander {
 	public String sendRequest(String commandString, int outlength)
 			throws UnknownHostException, IOException,
 			StringIndexOutOfBoundsException, SocketTimeoutException, InvalidOutputException {
-		
 		String response = "";
-		StringBuffer line = new StringBuffer();
-		
-		logger.debug("Sending command, {}", commandString);
-		((PrintWriter) out).print(commandString + commandTerminator);
+		if(connection.equalsIgnoreCase("tcp")){
+			StringBuffer line = new StringBuffer();
+			
+			logger.debug("Sending command, {}", commandString);
+			((PrintWriter) out).println(commandString + commandTerminator);
 
-		// When number of characters for the output is known, only read that many characters
-		if (outlength > 0) {
-			logger.debug("Reading {} characters of response.", outlength);
-			int temp;
-			for (int i = 0; i < outlength; i++) {
-				temp = in.read();
-				line.append((char) temp);
-			}
-			response = line.toString();
-		// empty the buffer string
-			line.delete(0, line.length() - 1);
-		}
-		// When the terminator of the output is known, read until the terminator has reached
-		else if (responseTerminator != null) {
-			int temp;
-			logger.debug("Reading until terminator is reached.");
-			while (line.indexOf(responseTerminator) == -1) {
-				temp = in.read();
-				line.append((char) temp);
-				int index = line.indexOf(responseTerminator);
-		// There were some occasion that terminator was read multiple times
-		// before actual response was read. to avoid this,
-		// if the terminator is the first characters read, empty the buffer
-		// so it won't cause the loop to exit.
-				if (index == 0){
-					line.setLength(0);
-				}
-				if (index != -1) {
-					response = line.toString().substring(0, index);
-				}
-			}
-		}
-		// Read until socket times out, then loop will exit by the SocketTimeoutException
-		// Exception is caught here since it is what we expect to happen.
-		else {
-			logger.debug("Reading response");
-			try {
+			// When the terminator of the output is known, read until the terminator has reached
+			if (responseTerminator != null) {
 				int temp;
-				while (true) {
+				logger.debug("Reading until terminator is reached.");
+				while (line.indexOf(responseTerminator) == -1) {
 					temp = in.read();
-					if(temp!=0){
-						line.append((char) temp);	
+					line.append((char) temp);
+					int index = line.indexOf(responseTerminator);
+			// There were some occasion that terminator was read multiple times
+			// before actual response was read. to avoid this,
+			// if the terminator is the first characters read, empty the buffer
+			// so it won't cause the loop to exit.
+					if (index == 0){
+						line.setLength(0);
+					}
+					if (index != -1) {
+						response = line.toString().substring(0, index);
 					}
 				}
-			} catch (SocketTimeoutException e) {
-				logger.debug("Socket Timeout");
-			} finally {
-		// when the socket times out, try to put together the response.
-				logger.debug("Retriveing output");
-		// if line is length of 0, it means no response, 
-		// hence throw invalidOutputException after closing.
+			}
+			// When number of characters for the output is known, only read that many characters
+			else if (outlength > 0) {
+				logger.debug("Reading {} characters of response.", outlength);
+				int temp;
+				for (int i = 0; i < outlength; i++) {
+					temp = in.read();
+					line.append((char) temp);
+				}
 				response = line.toString();
-				if (response.length() == 0) {
-					throw new InvalidOutputException("No output was read for command " + commandString);
+			// empty the buffer string
+				line.delete(0, line.length() - 1);
+			}
+			// Read until socket times out, then loop will exit by the SocketTimeoutException
+			// Exception is caught here since it is what we expect to happen.
+			else {
+				logger.debug("Reading response");
+				try {
+					int temp;
+					while (true) {
+						temp = in.read();
+						if(temp!=0){
+							line.append((char) temp);	
+						}
+					}
+				} catch (SocketTimeoutException e) {
+					logger.debug("Socket Timeout");
+				} finally {
+			// when the socket times out, try to put together the response.
+					logger.debug("Retriveing output");
+			// if line is length of 0, it means no response, 
+			// hence throw invalidOutputException after closing.
+					response = line.toString();
+					if (response.length() == 0) {
+						throw new InvalidOutputException("No output was read for command " + commandString);
+					}
 				}
 			}
+		}else if(connection.equalsIgnoreCase("udp")){
+			sendCommand(commandString);
+			DatagramPacket packet = new DatagramPacket(new byte[256], 256);
+			udpSocket.receive(packet);
+			response = new String(packet.getData(),0,packet.getLength());
 		}
-		
 		return response;
 
 	}
@@ -356,6 +381,7 @@ public class Commander {
 		Command cmd = commandMap.get(command);
 		ArrayList<Object> params = new ArrayList<Object>();
 		for(int ii = 0; ii<parameters.length; ii++){
+			System.out.println(cmd.getParameterName(ii));
 			Parameter p = paramMap.get(cmd.getParameterName(ii));
 			params.add(p.stringToObject(parameters[ii]));
 		}
@@ -378,4 +404,20 @@ public class Commander {
 	 * @return
 	 */
 	public String getName(){return name;}
+	/**
+	 * Returns the command object using the key
+	 * @param key
+	 * @return
+	 */
+	public Command getCommand(String key){
+		return commandMap.get(key);
+	}
+	/**
+	 * returns the parameter object using the key
+	 * @param key
+	 * @return
+	 */
+	public Parameter getParam(String key){
+		return paramMap.get(key);
+	}
 }
