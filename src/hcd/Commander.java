@@ -14,6 +14,8 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -36,10 +38,14 @@ public class Commander {
 	private String responseTerminator;
 	// a string(char sequence) that separates command with parameter 
 	// (used in creating command string)
-	protected String commandParameterSeperator;
+	private String commandParameterSeperator;
 	// a string(char sequence) that separates parameters from each other 
 	// (used in creating command string)
-	protected String parameterSeperator;
+	private String parameterSeperator;
+	//a string that indicates if the response has error or has status info.
+	private String deviceErrorStatusRegex;
+	private String errorStatusNotifier;
+
 	
 	// Maps of Command Object and Parameter Objects that will hold references.
 	private HashMap<String, Command> commandMap;
@@ -64,7 +70,8 @@ public class Commander {
 	}
 	
 	/**
-	 * Connects to the socket, and leave it connected until disconnect is called
+	 * For TCP, connects to the socket, and leave it connected until disconnect is called
+	 * For UDP, construct udpSocket.
 	 * uses socket information (host and port) read from JSON configuration
 	 * @throws UnknownHostException
 	 * @throws IOException
@@ -84,15 +91,16 @@ public class Commander {
 				connected = true;
 			}else if (connection.equalsIgnoreCase("udp")){
 				udpSocket = new DatagramSocket();
+				connected = true;
 			}else {
-				logger.debug("No proper connection type is in JSON configuration file");
+				logger.debug("No proper connection type is set");
 			}
 		} else {
 			System.out.format("Already connected to %s, port %d", host, port);
 		}
 	}
 	/**
-	 * Disconnects from the socket and closes I/O stream.
+	 * Disconnects from the tcp socket and closes I/O stream.
 	 * @throws IOException
 	 */
 	public void disconnect() throws IOException{
@@ -209,8 +217,8 @@ public class Commander {
 				}
 			}
 		}else if(connection.equalsIgnoreCase("udp")){
-			sendCommand(commandString);
 			DatagramPacket packet = new DatagramPacket(new byte[256], 256);
+			sendCommand(commandString);
 			udpSocket.receive(packet);
 			response = new String(packet.getData(),0,packet.getLength());
 		}
@@ -318,17 +326,16 @@ public class Commander {
 		String cmdString = constructCommandString(command,parameters);
 		
 		String response = null;
-		if (cmd.getResponseLength() > 0) {
-			response = sendRequest(cmdString, cmd.getResponseLength());
-		} else if (cmd.isRequest()) {
+		
+		if (cmd.isRequest()||deviceErrorStatusRegex != null || cmd.getErrorStatusRegex()!= null) {
 			response = sendRequest(cmdString);
-		} else {
+		}else {
 			sendCommand(cmdString);
 			return null;
 		}
 		logger.debug("Response to " + cmdString + "\n" + response);
 
-		return cmd.formatOutputObject(response, paramMap);
+		return formatOutputObject(cmd, response);
 	}
 	/**
 	 * Overloading of submit(String, ArrayList<Object>). 
@@ -419,5 +426,65 @@ public class Commander {
 	 */
 	public Parameter getParam(String key){
 		return paramMap.get(key);
+	}
+
+	public ArrayList<Object> formatOutputObject(Command cmd, String response) throws InvalidParameterException{
+		String happyformat = null;
+		String sadformat = null;
+		String rf, es;
+		int numItem;
+		ArrayList<Object> output = new ArrayList<Object>();
+		
+		if((rf = cmd.constructResponseFormat(paramMap))!= null){happyformat = rf;}
+		if((es = cmd.getErrorStatusRegex()) != null){sadformat = es;}
+		else if(deviceErrorStatusRegex != null){sadformat = deviceErrorStatusRegex;} 
+		
+		if(happyformat!= null){
+			Pattern hpattern = Pattern.compile(happyformat, Pattern.DOTALL);
+			Matcher hmatcher = hpattern.matcher(response);	
+			numItem = hmatcher.groupCount();
+			while (hmatcher.find()){
+				if(hmatcher.group(1).length()>0){
+					ArrayList<Object> outArray = new ArrayList<Object>();
+					// going through the match
+					for(int i = 0; i<numItem; i++){
+						// get the parameter object and get the corresponding string
+						Parameter p = paramMap.get(cmd.getResponseList().get(i));
+						String s = hmatcher.group(i+1);
+						// convert the string into object, and add to Array
+						outArray.add(p.stringToObject(s));
+					}
+					// add the object to ArrayList
+					output.add(outArray);
+				}	
+			}
+		}
+		if(output.size()==0 && sadformat != null)
+		{
+			Pattern spattern = Pattern.compile(sadformat, Pattern.DOTALL);
+			Matcher smatcher = spattern.matcher(response);
+			numItem = smatcher.groupCount();
+			while (smatcher.find()){
+				ArrayList<String> outArray = new ArrayList<String>();
+				outArray.add("*");
+				for(int ii = 0; ii<numItem; ii++){
+					outArray.add(smatcher.group(ii+1));
+				}
+				output.add(outArray);
+			}
+		}
+		// ArrayList that will be output
+								// number of items will be in Array
+		
+		
+		// For ever match of the response format found,
+		
+		
+		
+		//TODO errorcase(whileloop condition)
+		//TODO multiline support(newline parameter, regex dotall)
+		//TODO one line okay, other bad?????
+		//TODO server for hardware simulator?
+		return output;
 	}
 }

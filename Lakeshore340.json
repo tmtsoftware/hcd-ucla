@@ -1,5 +1,6 @@
 {
   "name" : "Lakeshore 340",
+  "connection" : "tcp",
   "host": "ets3",
   "port": 3006,
   "timeout": 5000, 
