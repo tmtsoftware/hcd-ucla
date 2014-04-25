@@ -13,78 +13,62 @@
     	"getDateTime":{
 		"command" : "DATETIME?",
 		"description" : "Returns date and time information in java.util.date",
-		"responseLength" : 23,
-		"responseList" : ["date"]
+		"responseFormat" : "(date)"
 	},
 	"setDateTime":{
-		"command" : "DATETIME",
-		"description" : "Configures date and time using 24 hour format.",
-		"paramList" : ["date"]
+		"command" : "DATETIME (date)",
+		"description" : "Configures date and time using 24 hour format."
 	},
 	"getTempK":{
-		"command" : "KRDG?",
+		"command" : "KRDG? (input)",
 		"description" : "Returns the kelvin reading of the single input sensor",
-		"paramList" : ["input"],
-		"responseLength" : 11,
-		"responseList" : ["kelvin"]
+		"responseFormat" : "(kelvin)"
 	},
 	"setAlarm" : {
-	  "command" : "ALARM",
-	  "description"  : "Configure input alarm parameters",
-	  "paramList" : ["input","onoff", "source", "high", "low", "latch", "relay"]  
+	  "command" : "ALARM (input),(onoff),(source),(high),(low),(latch),(relay)",
+	  "description"  : "Configure input alarm parameters"
 	},
 	"getAlarmConfig" : {
-	  "command" : "ALARM?",
+	  "command" : "ALARM? (input)",
 	  "description"  : "Query input alarm parameters",
-	  "paramList" : ["input"],
-	  "responseList" : ["onoff", "source", "high", "low", "latch", "relay"],
-	  "outputType" : "ArrayList"	  
+	  "responseFormat" : "(onoff),(source),(high),(low),(latch),(relay)"  
 	},
 	"setAnalog" : {
-	  "command": "ANALOG",
-	  "description": "Configure analog output parameters",
-	  "paramList" : ["output","bipolar","mode","input","source","high","low","manual"]  
+	  "command": "ANALOG (output),(bipolar),(mode),(input),(source),(high),(low),(manual)",
+	  "description": "Configure analog output parameters"
 	},
 	"getAnalogConfig": {
-	  "command": "ANALOG?",
+	  "command": "ANALOG? (output)",
 	  "description": "Query analog output parameters",
-	  "paramList": ["output"],
-	  "responseList": ["bipolar","mode","input","source","high","low","manual"],
-	  "outputType": "ArrayList"
+	  "responseFormat": "(bipolar),(mode),(input),(source),(high),(low),(manual)"
 	},
 	"getLogStat": {
 	  "command": "LOG?",
 	  "description" : "Query logging status",
-	  "responseList" : ["onoff"],
-	  "outStringLength" : 1,
-	  "outputType" : "int"
+	  "responseFormat" : "(onoff)"
 	},
 	"setLog": {
-	  "command": "LOG",
-	  "description" : "Configure logging status",
-	  "paramList" : ["onoff"]
+	  "command": "LOG (onoff)",
+	  "description" : "Configure logging status"
 	},
 	"getAlarmStat": {
-	  "command": "ALARMST?",
+	  "command": "ALARMST? (input)",
 	  "description" : "Query input sensor's  alarm status",
-	  "paramList" : ["input"],
-	  "responseList" : ["high status","low status"]
+	  "responseFormat" : "(high status),(low status)"
 	},
 	"SoftCalGen": {
-	  "command" : "SCAL",
-          "description" : "Generates a SoftCal curve. NOTE: Curves are not permanently updated in the curve flash until a CRVSAV command is issued. May take some time, use the BUSY? command to determine completion.",
-	  "paramList" : ["std","dest","serialNum","tempPt","sensorPt","tempPt","sensorPt","tempPt","sensorPt"]
+	  "command" : "SCAL (std),(dest),(serialNum),(tempPT),(sensorPT),(tempPT),(sensorPT),(tempPT),(sensorPT)",
+          "description" : "Generates a SoftCal curve. NOTE: Curves are not permanently updated in the curve flash until a CRVSAV command is issued. May take some time, use the BUSY? command to determine completion."
 	},
 	"CurveSave":{
 	  "command" : "CRVSAV",
-	  "description" : "Updates the Curve Flash with the current user curves. May take severla seconds; use the BUSY? command to determine when complete."
+	  "description" : "Updates the Curve Flash with the current user curves. May take several seconds; use the BUSY? command to determine when complete."
 	},
 	"getBusyStat":{
 	  "command" : "BUSY?",
-	  "description" : "Indicates that the instrument is busy performing a lengty operatio nlike generating a SoftCal curve, writing to the Flash chip, etc. Commands that use the Instrumetn Busy Status say so in their description.",
+	  "description" : "Indicates that the instrument is busy performing a lengthy operation like generating a SoftCal curve, writing to the Flash chip, etc. Commands that use the Instrumetn Busy Status say so in their description.",
 	  "outStringLength" : 1,
-	  "responseList" : ["busy"],
-	  "outputType" : "int"
+	  "responseFormat" : "(busy)"
 	}
   },
   "paramMap": {
@@ -101,7 +85,7 @@
       	"type": "string",
       	"range": "A,B,C1,C2,C3,C4,D1,D2,D3,D4",
       	"dataFormat" = "([AB]|[CD][1-4])",
-	"paramFormat" = "%s",
+		"paramFormat" = "%s",
       	"description": "Indicates which input sensor to use."
     },
     "output": {

@@ -1,6 +1,5 @@
 package hcd;
 
-
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.text.ParsePosition;
@@ -15,7 +14,11 @@ public class Parameter {
 	private String paramFormat;		// format of the data to be used as parameter
 	private String dateFormat;		// (Optional) for date typed parameter
 	private String description;		// description of the parameter
-	
+	public static String DATETIMEFORMAT_DEFAULT = "yyyy-MM-dd HH:mm:ss";
+	public static String DEFAULT_PARAMFORMAT_STRING = "%s";
+	public static String DEFUALT_PARAMFORMAT_DOUBLE = "%f";
+	public static String DEFUALT_PARAMFORMAT_INT = "%d";
+	public static String DEFAULT_PARAMFORMAT_CHAR = "%s1";
 	
 	/**
 	 * Covert a Object value of this parameter into String value
@@ -27,20 +30,27 @@ public class Parameter {
 	public String objectToString(Object obj) throws InvalidParameterException{
 		// 1. ready the class type according to the type of the parameter
 		Class<?> classType;
+		String defaultParamformatString = DEFAULT_PARAMFORMAT_STRING;
 		if(type.equalsIgnoreCase("string")) {
 			classType = String.class;
 		}else if(type.equalsIgnoreCase("int")) {
 			classType = Integer.class;
+			defaultParamformatString = DEFUALT_PARAMFORMAT_INT;
 		}else if (type.equalsIgnoreCase("char")) {
 			classType = Character.class;
+			defaultParamformatString = DEFAULT_PARAMFORMAT_CHAR;
 		}else if (type.equalsIgnoreCase("double")) {
 			classType = Double.class;
+			defaultParamformatString = DEFUALT_PARAMFORMAT_DOUBLE;
 		}else if (type.equalsIgnoreCase("date")) {
 			classType = Date.class;
+			defaultParamformatString = DATETIMEFORMAT_DEFAULT;
 		}else {
 			classType = Object.class;
 		}
-		
+		if(paramFormat == null){
+			paramFormat = defaultParamformatString;
+		}
 		// 2. 	ready the string for return
 		String out = "";
 		
@@ -48,54 +58,24 @@ public class Parameter {
 		//		if not, throw InvalidParameterException
 		if(classType.isInstance(obj)){
 		// 3.1 if it is type of "date", parse it according to the dateFormat
-			if(type.equals("date")){
+		//TODO dateformat response&param seperate?
+			if (type.equals("date")){
 				DateFormat df = new SimpleDateFormat(dateFormat);
 				out = df.format(obj);
 		// 3.2 if it is other types, parse it according to paramFormat;
-			}else{
+			} else {
 				out = String.format(paramFormat, obj);
 			}
-		}else{
+		} else {
 			String msg = name + " requires " + classType +": " + obj.getClass() + " entered.";
 			throw new InvalidParameterException(msg);
 		}
 		
 		// 4. 	check if the string is one of the accepted value. if not, thrown invalidParameterException.
-		if(withinRange(out)){
+		if(withinRange(out)) {
 			return out;
 		} else {
 			throw new InvalidParameterException("Out of range: " + range + " required, "+ out + " entered");
-		}
-	}
-	/**
-	 * Convert a String value of this Parameter into a Object value
-	 * @param s
-	 * @return
-	 * @throws InvalidParameterException
-	 */
-	public Object stringToObject(String s) throws InvalidParameterException {
-		try {
-			if(type.equals("int")){
-				return Integer.parseInt(s);
-			}else if (type.equals("double")){
-				return Double.parseDouble(s);
-			}else if (type.equals("char")) {
-				if(s.length()==1){
-					return s.charAt(0);
-				}
-				else{
-					throw new NumberFormatException();
-				}
-			}else if (type.equals("date")){
-				SimpleDateFormat dtf = new SimpleDateFormat(dateFormat);
-				return dtf.parse(s,new ParsePosition(0));
-			}else{
-				return s;
-			}
-		// possible exception in this try block is format exception.
-		// catch it, and throw new invalid parameter exception with some more detail.
-		} catch (Exception e) {
-			throw new InvalidParameterException(String.format("For %s, %s was entered for type of %s.",name, s, type));
 		}
 	}
 	/**
@@ -171,34 +151,46 @@ public class Parameter {
 		// 2 if no range is in config, there is no limit. so return true.
 		else{return true;}
 	}
-	/**
-	 * Return the name of Parameter
-	 * @return
-	 */
+	
 	public String getName(){
 		return name;
 	}
-	/**
-	 * Return the type of Parameter
-	 * @return
-	 */
 	public String getType(){
 		return type;
 	}
-	/**
-	 * Return the regex string how the hardware will format the value
-	 * @return
-	 */
 	public String getDataFormat(){
 		return dataFormat;
 	}
-	/**
-	 * Return the description about the Parameter
-	 * @return
-	 */
+
+
+	
+	// parse the input string into an object according to its configured type.
+	public Object stringToObject(String s) throws InvalidParameterException {
+		try {
+			if(type.equals("int")){
+				return Integer.parseInt(s);
+			}else if (type.equals("double")){
+				return Double.parseDouble(s);
+			}else if (type.equals("char")) {
+				if(s.length()==1){
+					return s.charAt(0);
+				}
+				else{
+					throw new NumberFormatException();
+				}
+			}else if (type.equals("date")){
+				SimpleDateFormat dtf = new SimpleDateFormat(dateFormat);
+				return dtf.parse(s,new ParsePosition(0));
+			}else{
+				return s;
+			}
+		// possible exception in this try block is format exception.
+		// catch it, and throw new invalid parameter exception with some more detail.
+		} catch (Exception e) {
+			throw new InvalidParameterException(String.format("For %s, %s was entered for type of %s.",name, s, type));
+		}
+	}
 	public String getDescription(){
 		return description;
 	}
-	
-	
 }

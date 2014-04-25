@@ -6,6 +6,7 @@ import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Date;
+
 import com.google.gson.Gson;
 
 public class Tester {
@@ -34,15 +35,15 @@ public class Tester {
 		 * the output is designed to be 2D ArrayList<Object> to handle multiple line responses.
 		 */
 		String[] param1 = {"C3"};
-		ArrayList<Object> result1 = cmdr.submit("getTempK", param1);
+		ArrayList<ArrayList<Object>> result1 = cmdr.submit("getTempK", param1);
 		System.out.println(result1);							//[[292.286]]
 		
-		ArrayList<Object> result2 = cmdr.submit("getDateTime");
+		ArrayList<ArrayList<Object>> result2 = cmdr.submit("getDateTime");
 		System.out.println(result2);							//[[Mon Feb 24 13:06:36 PST 2014]]
 		
 		ArrayList<Object> param3 = new ArrayList<Object>();
 		param3.add(new Date());
-		ArrayList<Object> result3 = cmdr.submit("setDateTime", param3);
+		ArrayList<ArrayList<Object>> result3 = cmdr.submit("setDateTime", param3);
 		System.out.println(result3);							// null
 
 		

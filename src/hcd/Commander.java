@@ -1,6 +1,8 @@
 package hcd;
 
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -20,6 +22,8 @@ import java.util.regex.Pattern;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.google.gson.Gson;
+
 public class Commander {
 	
 	// name of the hardware
@@ -36,17 +40,9 @@ public class Commander {
 	// terminator for the response from the hardware, 
 	// in case of being different than command terminator
 	private String responseTerminator;
-	// a string(char sequence) that separates command with parameter 
-	// (used in creating command string)
-	private String commandParameterSeperator;
-	// a string(char sequence) that separates parameters from each other 
-	// (used in creating command string)
-	private String parameterSeperator;
 	//a string that indicates if the response has error or has status info.
 	private String deviceErrorStatusRegex;
 	private String errorStatusNotifier;
-
-	
 	// Maps of Command Object and Parameter Objects that will hold references.
 	private HashMap<String, Command> commandMap;
 	private HashMap<String, Parameter> paramMap;
@@ -65,8 +61,18 @@ public class Commander {
 	// Log4J logger. (might change to custom logging) 
 	private Logger logger;
 	// setting logger.
+	
 	public void setLogger(String loggerName){
 		logger= LogManager.getLogger(loggerName);
+	}
+	public static Commander getCommanderObject(String path) throws FileNotFoundException{
+		String jsonFilePath = path; 
+		Gson gson = new Gson();
+		FileReader fr = new FileReader(jsonFilePath);
+		Commander cmdr = gson.fromJson(fr, Commander.class);
+		cmdr.setLogger(cmdr.getName());
+	
+		return cmdr;
 	}
 	
 	/**
@@ -117,6 +123,7 @@ public class Commander {
 		}
 	}
 	
+	
 	/**
 	 * Send commands through the socket with no response expected.
 	 * @param commandString
@@ -133,7 +140,6 @@ public class Commander {
 			udpSocket.send(packSent);
 		}
 	}
-	
 	/**
 	 * Send request through the socket and return the response as String.
 	 * case 1 : if number of characters of the response is known, read that many characters
@@ -239,78 +245,37 @@ public class Commander {
 		return sendRequest(commandString, -1);
 	}	
 	
-	/**
-	 * Construct a command string as configured in Command object using parameters
-	 * @param command
-	 * @param parameters
-	 * @return
-	 * @throws InvalidParameterException
-	 * @throws InvalidCommandException
-	 */
-	public String constructCommandString(String command, ArrayList<Object> parameters) throws InvalidParameterException, InvalidCommandException {
-		// 1. 	grab command from the map. if not found, throw an exception
-		Command c = commandMap.get(command);
-		if (c == null) {
-			throw new InvalidCommandException(command + " was not found in Command Map");
+	
+	public String constructCommandString(String cmdKey, ArrayList<Object> parameters) throws InvalidParameterException{
+		Command c = getCommand(cmdKey);
+		String cmdstr = c.getCommand();
+		Pattern pattern = Pattern.compile("(\\(\\w*?\\))");
+		Matcher matcher = pattern.matcher(cmdstr);
+
+		int counter = 0;
+		while(matcher.find()){
+			counter ++;
+			if(counter <= parameters.size()){
+				String paramKey = matcher.group().replace("(","").replace(")","");
+				Parameter p = paramMap.get(paramKey);
+				String paramVal = p.objectToString(parameters.get(counter-1));
+				cmdstr = matcher.replaceFirst(paramVal);
+				matcher = pattern.matcher(cmdstr);
+			}	
+		}
+		if(counter != parameters.size()){
+			throw new InvalidParameterException("Number of parameters does not match. " + counter + " required, " + parameters.size() + " entered.");
 		}
 		
-		// 2. 	start the commandString with the commandName
-		String cmdString = c.getCommand();
-
-		// 3. 	if no parameters or empty parameters were passed in, ask commander for paramList.
-		//		if the paramList is not null, throw an exception
-		//		else, (paramList is null, nothing else to be added to commandString) return cmdString.
-		if (parameters == null || parameters.size()==0) {
-			if (c.getNumParameters() > 0) {
-				throw new InvalidParameterException("No parameters passed in. " + command
-						+ " expects the following parameters:"+ c.getParamList());
-			} else {
-				return cmdString;
-			}
-		}
-		// 4.	if some parameters are passed in, it's time to check.
-		else {
-		// 4-1	When configuration expects some parameters,
-		// 		but number of parameters passed in does not match with configuration,
-		//		throw an exception
-			if (parameters.size() != c.getNumParameters()) {
-				throw new InvalidParameterException("Size of input parameter list does not match with command specification from config file: " + command +" requires "+c.getNumParameters()+"parameters");
-			}
-		// 4-2	Going through the parameters passed in.
-			int ii=0;
-			for (Object o : parameters) {
-		// 4-2-1	grab the parameter KEY from command object 
-		//			and also grab the parameter OBJECT from the map
-				String paramName = c.getParameterName(ii);
-				Parameter p = paramMap.get(paramName);
-		// 4-2-2 	when the parameter of the given name was not found from configuration,
-		//			p will be null, then throw an exception
-				if (p == null) {
-					//. this shouldn't happen if configuration file is written properly.
-					//. TODO: validation configuration file (somewhere else, after loading) to ensure all parameters specified for all commands has a matching parameter in paramMap
-					throw new InvalidParameterException("Parameter name from configuration is not found in parameter map.");
-				}
 				
-		//4-2-3 parse the object to string, throws exception if type mismatch
-				String parsed = p.objectToString(o);
-
-		//4-2-4	if this parameter is first parameter, add commandParameterSeperator before
-				//		else, add parameterSeperator before.
-				if (ii == 0) {
-					cmdString = cmdString + commandParameterSeperator	+ parsed;
-				} else {
-					cmdString = cmdString + parameterSeperator + parsed;
-				}
-				ii++;
-			}
-		}
-		return cmdString;
+		return cmdstr;
 	}
+	
 	
 	/**
 	 * Submit the command/request to the hardware and return the response 
 	 * as an ArrayList formatted as configured in Command object.
-	 * @param command
+	 * @param cmdKey
 	 * @param parameters
 	 * @return
 	 * @throws InvalidParameterException
@@ -321,9 +286,9 @@ public class Commander {
 	 * @throws IOException
 	 * @throws InvalidOutputException
 	 */
-	public ArrayList<Object> submit(String command, ArrayList<Object> parameters) throws InvalidParameterException, InvalidCommandException, StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, IOException, InvalidOutputException{
-		Command cmd = commandMap.get(command);
-		String cmdString = constructCommandString(command,parameters);
+	public ArrayList<ArrayList<Object>> submit(String cmdKey, ArrayList<Object> parameters) throws InvalidParameterException, InvalidCommandException, StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, IOException, InvalidOutputException{
+		Command cmd = getCommand(cmdKey);
+		String cmdString = constructCommandString(cmdKey,parameters);
 		
 		String response = null;
 		
@@ -350,7 +315,7 @@ public class Commander {
 	 * @throws IOException
 	 * @throws InvalidOutputException
 	 */
-	public ArrayList<Object> submit(String command) throws InvalidParameterException, InvalidCommandException, StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, IOException, InvalidOutputException{
+	public ArrayList<ArrayList<Object>> submit(String command) throws InvalidParameterException, InvalidCommandException, StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, IOException, InvalidOutputException{
 		return submit(command, new ArrayList<Object>());
 	}
 	/**
@@ -367,34 +332,23 @@ public class Commander {
 	 * @throws IOException
 	 * @throws InvalidOutputException
 	 */
-	public ArrayList<Object> submit(String command, Object[] parameters) throws StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException{
+	public ArrayList<ArrayList<Object>> submit(String command, Object[] parameters) throws StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException{
 		return submit(command,new ArrayList<Object>(Arrays.asList(parameters)));
 	}
-	/**
-	 * Overloading of submit(String, ArrayList<Object>). 
-	 * Converts the String[] as ArrayList<Object> as configured in Parameter
-	 * @param command
-	 * @param parameters
-	 * @return
-	 * @throws InvalidParameterException
-	 * @throws StringIndexOutOfBoundsException
-	 * @throws SocketTimeoutException
-	 * @throws UnknownHostException
-	 * @throws InvalidCommandException
-	 * @throws IOException
-	 * @throws InvalidOutputException
-	 */
-	public ArrayList<Object> submit(String command, String[] parameters) throws InvalidParameterException, StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, InvalidCommandException, IOException, InvalidOutputException{
-		Command cmd = commandMap.get(command);
-		ArrayList<Object> params = new ArrayList<Object>();
-		for(int ii = 0; ii<parameters.length; ii++){
-			System.out.println(cmd.getParameterName(ii));
-			Parameter p = paramMap.get(cmd.getParameterName(ii));
-			params.add(p.stringToObject(parameters[ii]));
+	public ArrayList<ArrayList<Object>> submit(String command, String[] parameters) throws InvalidParameterException, StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, InvalidCommandException, IOException, InvalidOutputException{
+		ArrayList<String> paramList = getCommand(command).getParamList();
+		Object[] objectArray = new Object[parameters.length];
+		if(paramList.size() != parameters.length){
+			throw new InvalidParameterException("Number of parameters does not match. " + paramList.size() + " needed, " + parameters.length + " entered.");
+		} else {
+			for(int ii = 0; ii<parameters.length; ii++){
+				String p = paramList.get(ii);
+				objectArray[ii] = getParam(p).stringToObject(parameters[ii]);
+			}
 		}
-		
-		return submit(command,params);
+		return submit(command,objectArray);
 	}
+
 	
 	/**
 	 * Returns the HashMap of Command objects
@@ -428,63 +382,71 @@ public class Commander {
 		return paramMap.get(key);
 	}
 
-	public ArrayList<Object> formatOutputObject(Command cmd, String response) throws InvalidParameterException{
+	// TODO unknown number of outputs?!
+	// TODO format to regex method
+	// TODO way to configure grouping symbol?
+	public ArrayList<ArrayList<Object>> formatOutputObject(Command cmd, String response) throws InvalidParameterException{
+		ArrayList<ArrayList<Object>> output = new ArrayList<ArrayList<Object>>();
+		ArrayList<Parameter> responseList = new ArrayList<Parameter>();
 		String happyformat = null;
 		String sadformat = null;
-		String rf, es;
-		int numItem;
-		ArrayList<Object> output = new ArrayList<Object>();
-		
-		if((rf = cmd.constructResponseFormat(paramMap))!= null){happyformat = rf;}
-		if((es = cmd.getErrorStatusRegex()) != null){sadformat = es;}
+		// use responseFormat from json to create actual regex.
+		if(response!= null){
+			happyformat = cmd.getResponseFormat();
+			Pattern pattern = Pattern.compile("(\\(\\w*?\\))");
+			Matcher matcher = pattern.matcher(happyformat);
+			
+			while(matcher.find()){
+				String found = matcher.group();
+				String paramKey = found.replace("(","").replace(")","");
+				Parameter p = paramMap.get(paramKey);
+				responseList.add(p);
+				String paramRegex = p.getDataFormat();
+				int open = matcher.start();
+				int close = matcher.end();
+				happyformat = happyformat.substring(0, open) + paramRegex + happyformat.substring(close);
+				matcher = pattern.matcher(happyformat);
+			}
+		}
+		// creating actual errorStatusRegex
+		if(cmd.getErrorStatusRegex() != null){sadformat = cmd.getErrorStatusRegex();}
 		else if(deviceErrorStatusRegex != null){sadformat = deviceErrorStatusRegex;} 
 		
+		// if happy format is expected, check happy response first
 		if(happyformat!= null){
 			Pattern hpattern = Pattern.compile(happyformat, Pattern.DOTALL);
 			Matcher hmatcher = hpattern.matcher(response);	
-			numItem = hmatcher.groupCount();
+			int numItem = hmatcher.groupCount();
 			while (hmatcher.find()){
-				if(hmatcher.group(1).length()>0){
-					ArrayList<Object> outArray = new ArrayList<Object>();
-					// going through the match
-					for(int i = 0; i<numItem; i++){
-						// get the parameter object and get the corresponding string
-						Parameter p = paramMap.get(cmd.getResponseList().get(i));
-						String s = hmatcher.group(i+1);
-						// convert the string into object, and add to Array
-						outArray.add(p.stringToObject(s));
-					}
-					// add the object to ArrayList
-					output.add(outArray);
-				}	
+				ArrayList<Object> outArray = new ArrayList<Object>();
+				// going through the match
+				for(int i = 0; i<numItem; i++){
+					String s = hmatcher.group(i+1);
+					// convert the string into object, and add to Array
+					outArray.add(responseList.get(i).stringToObject(s));
+				}
+				// add the object to ArrayList
+				output.add(outArray);
 			}
 		}
+		// if happyformat was not matched, check if it matches sadformat
 		if(output.size()==0 && sadformat != null)
 		{
 			Pattern spattern = Pattern.compile(sadformat, Pattern.DOTALL);
 			Matcher smatcher = spattern.matcher(response);
-			numItem = smatcher.groupCount();
+			int numItem = smatcher.groupCount();
 			while (smatcher.find()){
-				ArrayList<String> outArray = new ArrayList<String>();
-				outArray.add("*");
+				ArrayList<Object> outArray = new ArrayList<Object>();
+				outArray.add(errorStatusNotifier);
 				for(int ii = 0; ii<numItem; ii++){
 					outArray.add(smatcher.group(ii+1));
 				}
 				output.add(outArray);
 			}
 		}
-		// ArrayList that will be output
-								// number of items will be in Array
-		
-		
-		// For ever match of the response format found,
-		
-		
-		
-		//TODO errorcase(whileloop condition)
-		//TODO multiline support(newline parameter, regex dotall)
-		//TODO one line okay, other bad?????
-		//TODO server for hardware simulator?
 		return output;
+	}
+	public ArrayList<ArrayList<Object>> formatOutputObject(String cmdKey, String response) throws InvalidParameterException{
+		return formatOutputObject(getCommand(cmdKey),response);
 	}
 }
