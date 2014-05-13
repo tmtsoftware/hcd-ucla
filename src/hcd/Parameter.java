@@ -12,7 +12,6 @@ public class Parameter {
 	private String range;			// range of the acceptable value 
 	private String dataFormat;		// format of the data to be read
 	private String paramFormat;		// format of the data to be used as parameter
-	private String dateFormat;		// (Optional) for date typed parameter
 	private String description;		// description of the parameter
 	public static String DATETIMEFORMAT_DEFAULT = "yyyy-MM-dd HH:mm:ss";
 	public static String DEFAULT_PARAMFORMAT_STRING = "%s";
@@ -60,7 +59,7 @@ public class Parameter {
 		// 3.1 if it is type of "date", parse it according to the dateFormat
 		//TODO dateformat response&param seperate?
 			if (type.equals("date")){
-				DateFormat df = new SimpleDateFormat(dateFormat);
+				DateFormat df = paramFormat2SimpleDateFormat();
 				out = df.format(obj);
 		// 3.2 if it is other types, parse it according to paramFormat;
 			} else {
@@ -179,7 +178,7 @@ public class Parameter {
 					throw new NumberFormatException();
 				}
 			}else if (type.equals("date")){
-				SimpleDateFormat dtf = new SimpleDateFormat(dateFormat);
+				SimpleDateFormat dtf = paramFormat2SimpleDateFormat();
 				return dtf.parse(s,new ParsePosition(0));
 			}else{
 				return s;
@@ -192,5 +191,27 @@ public class Parameter {
 	}
 	public String getDescription(){
 		return description;
+	}
+
+	public SimpleDateFormat paramFormat2SimpleDateFormat(){
+		String dateformat = paramFormat;
+		dateformat = dateformat.replaceAll("%tY","yyyy");
+		dateformat = dateformat.replaceAll("%ty","yy");
+		dateformat = dateformat.replaceAll("%tB", "MMMM");
+		dateformat = dateformat.replaceAll("%tb","MMM");
+		dateformat = dateformat.replaceAll("%tm","MM");
+		dateformat = dateformat.replaceAll("%td","dd");
+		dateformat = dateformat.replaceAll("%te","d");
+		dateformat = dateformat.replaceAll("%tH","HH");
+		dateformat = dateformat.replaceAll("%tk","H");
+		dateformat = dateformat.replaceAll("%tI","hh");
+		dateformat = dateformat.replaceAll("%tl","h");
+		dateformat = dateformat.replaceAll("%tM","mm");
+		dateformat = dateformat.replaceAll("%tS","ss");
+		dateformat = dateformat.replaceAll("%tL","SSS");
+		dateformat = dateformat.replaceAll("%tZ","Z");
+		dateformat = dateformat.replaceAll("%tz","z");
+		
+		return new SimpleDateFormat(dateformat);
 	}
 }
