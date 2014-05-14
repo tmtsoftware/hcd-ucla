@@ -10,9 +10,11 @@ public class Command {
 	private String command;						// command line that will be passed on to device
 	private String description;					// description of this command
 	private int responseLength;					// if known, it can read only that many chars 
-	private String responseFormat;	
-	private String errorStatusRegex;			// For the case this command have different type of response for error/status
+	private String responseFormat;
+	private String happyRegex;
+	private String sadRegex;			// For the case this command have different type of response for error/status
 	private ArrayList<String> paramList;
+	private ArrayList<String> responseList;
 	
 	/**
 	 * Return this command's name
@@ -43,19 +45,24 @@ public class Command {
 	public int getResponseLength(){
 		return responseLength;
 	}
-	/**
-	 * Return number of response parameters.
-	 * @return
-	 */
-	public String getErrorStatusRegex(){
-		return errorStatusRegex;
+	public void setHappyRegex(String happy){
+		happyRegex = happy;
+	}
+	public String getHappyRegex(){
+		return happyRegex;
+	}
+	public void setSadRegex(String sad){
+		sadRegex = sad;
+	}
+	public String getSadRegex(){
+		return sadRegex;
 	}
 	public boolean isRequest(){
 		if(responseFormat != null) { return true; }
 		else { return false; }
 	}
 	
-	public void makeParamList(){
+	private void makeParamList(){
 		Pattern pattern = Pattern.compile("(\\(\\w*?\\))");
 		Matcher matcher = pattern.matcher(command);
 		
@@ -71,5 +78,25 @@ public class Command {
 			makeParamList();
 		}
 		return paramList;
+	}
+
+	private void makeResponseList(){
+		Pattern pattern = Pattern.compile("(\\(\\w*?\\))");
+		Matcher matcher = pattern.matcher(responseFormat);
+		
+		responseList = new ArrayList<String>();
+		
+		while(matcher.find()){
+			String found = matcher.group();
+			responseList.add(found.replace("(","").replace(")",""));
+		}
+	}
+	public ArrayList<String> getResponseList(){
+		if(!isRequest()){
+			return null;
+		}else if(responseList == null){
+			makeResponseList();
+		}
+		return responseList;
 	}
 }

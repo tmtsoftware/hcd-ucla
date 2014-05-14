@@ -17,7 +17,7 @@ public class Parameter {
 	public static String DEFAULT_PARAMFORMAT_STRING = "%s";
 	public static String DEFUALT_PARAMFORMAT_DOUBLE = "%f";
 	public static String DEFUALT_PARAMFORMAT_INT = "%d";
-	public static String DEFAULT_PARAMFORMAT_CHAR = "%s1";
+	public static String DEFAULT_PARAMFORMAT_CHAR = "%1s";
 	
 	/**
 	 * Covert a Object value of this parameter into String value

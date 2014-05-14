@@ -41,8 +41,8 @@ public class Commander {
 	// in case of being different than command terminator
 	private String responseTerminator;
 	//a string that indicates if the response has error or has status info.
-	private String deviceErrorStatusRegex;
-	private String errorStatusNotifier;
+	private String deviceSadRegex;
+	private String errorNotifier;
 	// Maps of Command Object and Parameter Objects that will hold references.
 	private HashMap<String, Command> commandMap;
 	private HashMap<String, Parameter> paramMap;
@@ -245,29 +245,16 @@ public class Commander {
 		return sendRequest(commandString, -1);
 	}	
 	
-	
-	public String constructCommandString(String cmdKey, ArrayList<Object> parameters) throws InvalidParameterException{
-		Command c = getCommand(cmdKey);
+	public String constructCommandString(String cmd, ArrayList<Object> parameters) throws InvalidParameterException{
+		Command c = getCommand(cmd);
 		String cmdstr = c.getCommand();
-		Pattern pattern = Pattern.compile("(\\(\\w*?\\))");
-		Matcher matcher = pattern.matcher(cmdstr);
-
-		int counter = 0;
-		while(matcher.find()){
-			counter ++;
-			if(counter <= parameters.size()){
-				String paramKey = matcher.group().replace("(","").replace(")","");
-				Parameter p = paramMap.get(paramKey);
-				String paramVal = p.objectToString(parameters.get(counter-1));
-				cmdstr = matcher.replaceFirst(paramVal);
-				matcher = pattern.matcher(cmdstr);
-			}	
+		ArrayList<String> plist = c.getParamList();
+		if(plist.size() != parameters.size()){
+			throw new InvalidParameterException("Number of parameters does not match. " + plist.size() + " required, " + parameters.size() + " entered.");
 		}
-		if(counter != parameters.size()){
-			throw new InvalidParameterException("Number of parameters does not match. " + counter + " required, " + parameters.size() + " entered.");
-		}
-		
-				
+		for(int ii = 0; ii<plist.size();ii++){
+			cmdstr = cmdstr.replace("("+plist.get(ii)+")", getParam(plist.get(ii)).objectToString(parameters.get(ii)));
+		}		
 		return cmdstr;
 	}
 	
@@ -275,7 +262,7 @@ public class Commander {
 	/**
 	 * Submit the command/request to the hardware and return the response 
 	 * as an ArrayList formatted as configured in Command object.
-	 * @param cmdKey
+	 * @param command
 	 * @param parameters
 	 * @return
 	 * @throws InvalidParameterException
@@ -286,80 +273,87 @@ public class Commander {
 	 * @throws IOException
 	 * @throws InvalidOutputException
 	 */
-	public ArrayList<ArrayList<Object>> submit(String cmdKey, ArrayList<Object> parameters) throws InvalidParameterException, InvalidCommandException, StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, IOException, InvalidOutputException{
-		Command cmd = getCommand(cmdKey);
-		String cmdString = constructCommandString(cmdKey,parameters);
+	public ArrayList<Object> submit(String command, ArrayList<Object> parameters) throws InvalidParameterException, InvalidCommandException, StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, IOException, InvalidOutputException{
+		Command cmd = getCommand(command);
+		String cmdString = constructCommandString(command,parameters);
 		
 		String response = null;
 		
-		if (cmd.isRequest()||deviceErrorStatusRegex != null || cmd.getErrorStatusRegex()!= null) {
+		if (cmd.isRequest()||deviceSadRegex != null || cmd.getSadRegex()!= null) {
 			response = sendRequest(cmdString);
+			logger.debug("Response to " + cmdString + "\n" + response);
+			return formatOutputObject(command, response);
 		}else {
 			sendCommand(cmdString);
 			return null;
 		}
-		logger.debug("Response to " + cmdString + "\n" + response);
-
-		return formatOutputObject(cmd, response);
+		
 	}
-	/**
-	 * Overloading of submit(String, ArrayList<Object>). 
-	 * Enters an empty ArrayList for command with no response.
-	 * @param command
-	 * @return
-	 * @throws InvalidParameterException
-	 * @throws InvalidCommandException
-	 * @throws StringIndexOutOfBoundsException
-	 * @throws SocketTimeoutException
-	 * @throws UnknownHostException
-	 * @throws IOException
-	 * @throws InvalidOutputException
-	 */
-	public ArrayList<ArrayList<Object>> submit(String command) throws InvalidParameterException, InvalidCommandException, StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, IOException, InvalidOutputException{
+	public ArrayList<Object> submit(String command) throws InvalidParameterException, InvalidCommandException, StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, IOException, InvalidOutputException{
 		return submit(command, new ArrayList<Object>());
 	}
-	/**
-	 * Overloading of submit(String, ArrayList<Object>).
-	 * converts the Array as ArrayList.
-	 * @param command
-	 * @param parameters
-	 * @return
-	 * @throws StringIndexOutOfBoundsException
-	 * @throws SocketTimeoutException
-	 * @throws UnknownHostException
-	 * @throws InvalidParameterException
-	 * @throws InvalidCommandException
-	 * @throws IOException
-	 * @throws InvalidOutputException
-	 */
-	public ArrayList<ArrayList<Object>> submit(String command, Object[] parameters) throws StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException{
+	public ArrayList<Object> submit(String command, Object[] parameters) throws StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException{
 		return submit(command,new ArrayList<Object>(Arrays.asList(parameters)));
 	}
-	public ArrayList<ArrayList<Object>> submit(String command, String[] parameters) throws InvalidParameterException, StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, InvalidCommandException, IOException, InvalidOutputException{
-		ArrayList<String> paramList = getCommand(command).getParamList();
+	public ArrayList<Object> submit(String command, String[] parameters) throws InvalidParameterException, StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, InvalidCommandException, IOException, InvalidOutputException{
+		return submit(command,stringToObjectArray(command,parameters));
+	}
+	public ArrayList<Object> submit(String command, String parameters) throws StringIndexOutOfBoundsException, SocketTimeoutException, UnknownHostException, InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException{
+		return submit(command, parameters.split(","));
+	}
+	public Object[] stringToObjectArray(String command, String[] parameters) throws InvalidParameterException{
+		ArrayList<String> pList = getCommand(command).getParamList();
 		Object[] objectArray = new Object[parameters.length];
-		if(paramList.size() != parameters.length){
-			throw new InvalidParameterException("Number of parameters does not match. " + paramList.size() + " needed, " + parameters.length + " entered.");
+		if(pList.size() != parameters.length){
+			throw new InvalidParameterException("Number of parameters does not match. " + pList.size() + " needed, " + parameters.length + " entered.");
 		} else {
 			for(int ii = 0; ii<parameters.length; ii++){
-				String p = paramList.get(ii);
+				String p = pList.get(ii);
 				objectArray[ii] = getParam(p).stringToObject(parameters[ii]);
 			}
 		}
-		return submit(command,objectArray);
+		return objectArray;
+	}
+	
+	//TODO Test this method once galil arrives
+	public ArrayList<ArrayList<Object>> submitMulti(ArrayList<String[]> pairArrayList, String separator, String terminator) throws StringIndexOutOfBoundsException, UnknownHostException, IOException, InvalidOutputException, InvalidParameterException
+	{
+		int numCmd = pairArrayList.size();
+		String totalCmdStr = "";
+		String totalRegex = "";
+		ArrayList<ArrayList<Object>> output = new ArrayList<ArrayList<Object>>();
+		
+		for(int ii = 0; ii < numCmd; ii ++){
+			String[] pair = pairArrayList.get(ii);
+			String[] p = {};
+			if(pair[1]!=null){
+				p = pair[1].split(",");
+			}
+
+			
+			totalRegex += "("+getHappyRegex(pair[0]).replaceAll("\\(|\\)", "")+"|"+getSadRegex(pair[0]).replaceAll("\\(|\\)", "") + ")";	
+			ArrayList<Object> params = new ArrayList<Object>(Arrays.asList(stringToObjectArray(pair[0],p)));
+			totalCmdStr += constructCommandString(pair[0], params) + separator;
+		}
+		totalCmdStr = totalCmdStr.substring(0,totalCmdStr.lastIndexOf(separator)) + terminator;
+//		System.out.println(totalCmdStr);
+		
+		String response = sendRequest(totalCmdStr);
+//		String response = ":: 1234::: 0:";
+		
+		Pattern totalP = Pattern.compile(totalRegex);
+		Matcher totalM = totalP.matcher(response);
+		
+		while(totalM.find()){
+			for(int ii=0; ii<numCmd; ii++){
+				String commandResponse = totalM.group(ii+1);
+//				System.out.println(commandResponse);
+				output.add(formatOutputObject(pairArrayList.get(ii)[0], commandResponse));
+			}
+		}
+		return output;
 	}
 
-	
-	/**
-	 * Returns the HashMap of Command objects
-	 * @return
-	 */
-	public HashMap<String, Command> getCommandMap() { return commandMap;} 
-	/**
-	 * Returns the HashMap of Parameter objects
-	 * @return
-	 */
-	public HashMap<String, Parameter> getParamMap() {return paramMap;}
 	/** 
 	 * Returns the name of the Hardware
 	 * @return
@@ -382,71 +376,78 @@ public class Commander {
 		return paramMap.get(key);
 	}
 
-	// TODO unknown number of outputs?!
-	// TODO format to regex method
-	// TODO way to configure grouping symbol?
-	public ArrayList<ArrayList<Object>> formatOutputObject(Command cmd, String response) throws InvalidParameterException{
-		ArrayList<ArrayList<Object>> output = new ArrayList<ArrayList<Object>>();
-		ArrayList<Parameter> responseList = new ArrayList<Parameter>();
-		String happyformat = null;
-		String sadformat = null;
-		// use responseFormat from json to create actual regex.
-		if(response!= null){
-			happyformat = cmd.getResponseFormat();
-			Pattern pattern = Pattern.compile("(\\(\\w*?\\))");
-			Matcher matcher = pattern.matcher(happyformat);
-			
-			while(matcher.find()){
-				String found = matcher.group();
-				String paramKey = found.replace("(","").replace(")","");
-				Parameter p = paramMap.get(paramKey);
-				responseList.add(p);
-				String paramRegex = p.getDataFormat();
-				int open = matcher.start();
-				int close = matcher.end();
-				happyformat = happyformat.substring(0, open) + paramRegex + happyformat.substring(close);
-				matcher = pattern.matcher(happyformat);
+	
+	public String getHappyRegex(String command){
+		Command cmd = getCommand(command);
+		if(cmd.getHappyRegex()== null) {
+			String happy = cmd.getResponseFormat();
+			ArrayList<String> rlist = cmd.getResponseList();
+			for(int ii = 0; ii<rlist.size(); ii++){
+				Parameter p = getParam(rlist.get(ii));
+				happy = happy.replace("("+rlist.get(ii)+")", p.getDataFormat());
 			}
+			cmd.setHappyRegex(happy);
 		}
-		// creating actual errorStatusRegex
-		if(cmd.getErrorStatusRegex() != null){sadformat = cmd.getErrorStatusRegex();}
-		else if(deviceErrorStatusRegex != null){sadformat = deviceErrorStatusRegex;} 
-		
-		// if happy format is expected, check happy response first
-		if(happyformat!= null){
-			Pattern hpattern = Pattern.compile(happyformat, Pattern.DOTALL);
-			Matcher hmatcher = hpattern.matcher(response);	
-			int numItem = hmatcher.groupCount();
-			while (hmatcher.find()){
-				ArrayList<Object> outArray = new ArrayList<Object>();
-				// going through the match
-				for(int i = 0; i<numItem; i++){
-					String s = hmatcher.group(i+1);
-					// convert the string into object, and add to Array
-					outArray.add(responseList.get(i).stringToObject(s));
-				}
-				// add the object to ArrayList
-				output.add(outArray);
-			}
-		}
-		// if happyformat was not matched, check if it matches sadformat
-		if(output.size()==0 && sadformat != null)
-		{
-			Pattern spattern = Pattern.compile(sadformat, Pattern.DOTALL);
-			Matcher smatcher = spattern.matcher(response);
-			int numItem = smatcher.groupCount();
-			while (smatcher.find()){
-				ArrayList<Object> outArray = new ArrayList<Object>();
-				outArray.add(errorStatusNotifier);
-				for(int ii = 0; ii<numItem; ii++){
-					outArray.add(smatcher.group(ii+1));
-				}
-				output.add(outArray);
-			}
-		}
-		return output;
+		return cmd.getHappyRegex();
 	}
-	public ArrayList<ArrayList<Object>> formatOutputObject(String cmdKey, String response) throws InvalidParameterException{
-		return formatOutputObject(getCommand(cmdKey),response);
+	
+	public String getSadRegex(String command){
+		Command cmd = getCommand(command);
+		if(cmd.getSadRegex() == null){
+			cmd.setSadRegex(deviceSadRegex);
+		} 
+		return cmd.getSadRegex();
+	}
+	
+	
+	// TODO unknown number of outputs?!
+	// TODO way to configure grouping symbol?
+	public ArrayList<Object> formatOutputObject(String command, String response) throws InvalidParameterException, InvalidOutputException{
+		Command cmd = getCommand(command);
+		ArrayList<Object> outArray = new ArrayList<Object>();
+		ArrayList<String> rList = cmd.getResponseList();
+		String happyformat = getHappyRegex(command);
+		String sadformat = getSadRegex(command);
+		String format = "";
+		if(happyformat!=null && sadformat!=null){
+			format = "("+happyformat.replaceAll("\\(|\\)", "")+")|("+sadformat.replaceAll("\\(|\\)", "") + ")";	
+		} else {
+			format = "("+happyformat.replaceAll("\\(|\\)", "")+")";
+		}
+		
+
+		Pattern pattern = Pattern.compile(format);
+		Matcher matcher = pattern.matcher(response);
+		while(matcher.find()){
+			if(matcher.group(1)!=null){
+				Pattern hpattern = Pattern.compile(happyformat, Pattern.DOTALL);
+				Matcher hmatcher = hpattern.matcher(matcher.group(1));	
+				int numItem = hmatcher.groupCount();
+				while (hmatcher.find()){
+					outArray = new ArrayList<Object>();
+					// going through the match
+					for(int ii = 0; ii<numItem; ii++){
+						String s = hmatcher.group(ii+1);
+						// convert the string into object, and add to Array
+						outArray.add(getParam(rList.get(ii)).stringToObject(s));
+					}
+					// add the object to ArrayList
+				}
+			}else if (sadformat != null){
+				Pattern spattern = Pattern.compile(sadformat, Pattern.DOTALL);
+				Matcher smatcher = spattern.matcher(matcher.group(2));
+				int numItem = smatcher.groupCount();
+				while (smatcher.find()){
+					outArray = new ArrayList<Object>();
+					outArray.add(errorNotifier);
+					for(int ii = 0; ii<numItem; ii++){
+						outArray.add(smatcher.group(ii+1));
+					}
+				}
+			}else{
+				throw new InvalidOutputException("No match was found from the response as configured");
+			}
+		}
+		return outArray;
 	}
 }
