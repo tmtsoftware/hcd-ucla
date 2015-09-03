@@ -1,0 +1,179 @@
+{
+  "name": "Galil",
+  "connection": "tcp",
+  "deviceSadRegex": "(\\?)",
+  "errorNotifier": "*",
+   "connectionProperties":{
+	  "host": "galil1",
+	  "port": 23,
+	  "timeout": 1000, 
+	  "commandTerminator" : "\r\n"
+  },
+  "commandMap": {
+    "getErrorCode": {
+      "name": "getErrorCode",
+      "command": "TC0",
+      "responseFormat": ".*?(eCode)\\s{2}(acknowledge)"
+    },
+    "setRelTarget": {
+      "name": "setRelTarget",
+      "command": "PR(axis)\u003d(counts)",
+      "responseFormat": "(acknowledge)"
+    },
+    "getRelTarget": {
+      "name": "getRelTarget",
+      "command": "PR(axis)\u003d\?",
+      "responseFormat": ".*?(counts)\\s{2}(acknowledge)"
+    },
+    "setMotorPosition": {
+      "name": "setMotorPosition",
+      "command": "DP(axis)\u003d(counts)",
+      "responseFormat": "(acknowledge)"
+    },
+    "getMotorPosition": {
+      "name": "getMotorPosition",
+      "command": "RP(axis)",
+      "responseFormat": ".*?(counts)\\s{2}(acknowledge)"
+    },
+    "motorOff": {
+      "name": "motorOff",
+      "command": "MO(axis)",
+      "responseFormat": "(acknowledge)"
+    },
+    "setMotorSpeed": {
+      "name": "setMotorSpeed",
+      "command": "SP(axis)\u003d(speed)",
+      "responseFormat": "(acknowledge)"
+    },
+    "getMotorSpeed": {
+      "name": "getMotorSpeed",
+      "command": "SP(axis)\u003d\?",
+      "responseFormat": ".*?(speed)\\s{2}(acknowledge)"
+    },
+    "setJogSpeed": {
+      "name": "setJogSpeed",
+      "command": "JG(axis)\u003d(speed)",
+      "responseFormat": "(acknowledge)"
+    },
+    "getJogSpeed": {
+      "name": "getJogSpeed",
+      "command": "JG(axis)\u003d\?",
+      "responseFormat": ".*?(speed)\\s{2}(acknowledge)"
+    },
+    "setAbsTarget": {
+      "name": "setAbsTarget",
+      "command": "PA(axis)\u003d(counts)",
+      "responseFormat": "(acknowledge)"
+    },
+    "beginMotion": {
+      "name": "beginMotion",
+      "command": "BG(axis)",
+      "responseFormat": "(acknowledge)"
+    },
+    "stopMotion": {
+      "name": "stopMotion",
+      "command": "ST(axis)",
+      "responseFormat": "(acknowledge)"
+    },
+    "getErrorDesc": {
+      "name": "getErrorDesc",
+      "command": "TC1",
+      "responseFormat": "(eCode) (eDesc)(acknowledge)"
+    },
+    "setMotorSmoothing": {
+      "name": "motorSmoothing",
+      "command": "KS(axis)\u003d(smooth)",
+      "responseFormat": "(acknowledge)"
+    },
+    "getMotorSmoothing": {
+      "name": "getMotorSmoothing",
+      "command": "KS(axis)\u003d\?",
+      "responseFormat": ".*?(smooth)\\s{2}(acknowledge)"
+    },
+    "setMotorType": {
+      "name": "motorType",
+      "command": "MT(axis)\u003d\?",
+      "responseFormat": ".*?(mType)\\s{2}(acknowledge)"
+    },
+    "getMotorType": {
+      "name": "motorType",
+      "command": "MT(axis)\u003d(mType)",
+      "responseFormat": "(acknowledge)"
+    },
+    "setLowCurrent": {
+      "name": "setLowCurrent",
+      "command": "LC(axis)\u003d(lcParam)",
+      "responseFormat": "(acknowledge)"
+    },
+    "getLowCurrent": {
+      "name": "getLowCurrent",
+      "command": "LC(axis)\u003d\?",
+      "responseFormat": "(lcParam)\\r\\n(acknowledge)"
+    },
+    "switchStatus" : {
+      "name" : "switchStatus",
+      "command" : "TS(axis)",
+      "responseFormat" : "(swStatus)\\r\\n(acknowledge)"
+    },
+    "motorOn": {
+      "name": "motorOn",
+      "command": "SH(axis)",
+      "responseFormat": "(acknowledge)"
+    }
+  },
+  "paramDefMap": {
+    "axis": {
+      "name": "axis",
+      "type": "char",
+      "dataRegex": "([a-zA-Z]{1})"
+    },
+    "eDesc": {
+      "name": "eDesc",
+      "type": "string",
+      "dataRegex": "(.+)"
+    },
+    "mType": {
+      "name": "mType",
+      "type": "double",
+      "range": "1,-1,1.5,-1.5,2,-2,2.5,-2.5",
+      "dataRegex": "([+-]{0,1}\\d*?\\.\\d*?)"
+    },
+    "eCode": {
+      "name": "eCode",
+      "type": "int",
+      "dataRegex": "(\\d{1,2})"
+    },
+     "swStatus": {
+      "name": "swStatus",
+      "type": "int",
+      "dataRegex": "(\\d{1,3})"
+    },
+    "lcParam": {
+      "name": "lcParam",
+      "type": "int",
+      "range" : "[0,2]",
+      "dataRegex": "(\\d{1})"
+    },
+    "acknowledge": {
+      "name": "acknowledge",
+      "type": "char",
+      "dataRegex": "(:)"
+    },
+    "smooth": {
+      "name": "smooth",
+      "type": "double",
+      "range": "[0.25,64.0]",
+      "dataRegex": "(\\d*?\\.\\d*?)"
+    },
+    "speed": {
+      "name": "speed",
+      "type": "int",
+      "dataRegex": "(\\d*?)"
+    },
+    "counts": {
+      "name": "counts",
+      "type": "int",
+      "dataRegex": "(\\d+)"
+    }
+  }
+}
