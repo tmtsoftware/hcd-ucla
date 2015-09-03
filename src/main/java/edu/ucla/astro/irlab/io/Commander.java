@@ -5,9 +5,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Modifier;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.HashMap;
 import java.util.Map.Entry;
 import java.util.regex.Matcher;
@@ -27,19 +25,39 @@ import edu.ucla.astro.irlab.io.ice.ICECommandInterface;
 import edu.ucla.astro.irlab.io.serial.SerialCommandInterface;
 import edu.ucla.astro.irlab.io.socket.TCPCommandInterface;
 import edu.ucla.astro.irlab.io.socket.UDPCommandInterface;
+/**
+ *	@author Ji Man Sohn @ UCLA Infrared Laboratory
+ *	Commander class holds informations of a hardware and is responsible to communicate with the hardware 
+ */
 public class Commander {
-	// name of the hardware
+	/** Name of the Commander, usually the name of the hardware */
 	private String name;
+	/** If it exist, regular expression of the device-specific error indicator*/
 	private String deviceSadRegex;
+	/** User-defined error Notifier that will be first element of output*/
 	private String errorNotifier;
-	
-	// Map of connection settings
+	/** HashMap of properties for connecting to the hardware. Generated from JSON*/
 	private HashMap<String, String> connectionProperties;
-	// Maps of Command Object and Parameter Objects that will hold references.
+	/** HashMap of Command class objects with their name as keys. Generated from JSON*/
 	private HashMap<String, Command> commandMap;
+	/** HashMap of ParameterDefinition class objects with their name as keys. Generated from JSON*/
 	private HashMap<String, ParameterDefinition> paramDefMap;
+	/** Boolean token that indicates connection status*/
+	public transient boolean connected = false;
+	/** Log4J logger. (might change to custom logging)*/ 
+	public transient Logger logger;
+	/** CommandInterface augo-generated using connectionProperties */
+	private transient CommandInterface interfaceConnection;
+	/** 
+	 * HashMap of ParameterDefinition class objects with their name as keys. 
+	 * Primitive data types of JAVA are predefined as default ParameterDefinitions
+	 */
 	public static final transient HashMap<String, ParameterDefinition> defaultParamDefMap;
+	/**
+	 * Map of regular expressions for each data type. Will be used setting each Commands' happyRegex.
+	 */
 	public static final transient HashMap<String, String> happyRegularExpressions;
+	// Initializing default HashMaps
 	static
 	{
 		defaultParamDefMap = new HashMap<String, ParameterDefinition>();
@@ -64,18 +82,50 @@ public class Commander {
 		happyRegularExpressions.put("string", "(.+)");
 	}
 	
-	
-	// boolean monitoring socket connection status
-	public transient boolean connected = false;
-	// Log4J logger. (might change to custom logging) 
-	public transient Logger logger;
-	private transient CommandInterface interfaceConnection;
-	
-	// setting logger.
-	public void setLogger(String loggerName) {
-		logger= LogManager.getLogger(loggerName);
-		logger.debug("Logger has been prepared");
+	/**
+	 * Alias for the same-named method with two parameters. Log level is "ALL" by default.
+	 * @param path Path to the JSON configuration file of this commander
+	 * @return Commander Object created from given JSON configuration.
+	 * @throws IOException
+	 * @throws InvalidConfigurationException
+	 */
+	public static Commander getCommanderObject(String path) throws IOException, InvalidConfigurationException{
+		return getCommanderObject(path, "all");
 	}
+	/**
+	 * Factory method of Commander. returns Commander created using JSON configuration at given path and with given log level.
+	 * @param Path to the JSON configuration file of this commander
+	 * @param Default log level of this Commander
+	 * @return Commander Object created from given JSON configuration.
+	 * @throws IOException
+	 * @throws InvalidConfigurationException
+	 */
+	public static Commander getCommanderObject(String path, String loglevel) throws IOException, InvalidConfigurationException{
+		String jsonFilePath = path; 
+		Gson gson = new Gson();
+		FileReader fr = new FileReader(jsonFilePath);
+		Commander cmdr = gson.fromJson(fr, Commander.class);
+		cmdr.setLogger(cmdr.getName(),loglevel);
+		cmdr.validate();		
+		cmdr.createCommandInterface();
+		return cmdr;
+	}
+	/**
+	 * Connect to the device using CommandInterface
+	 * @throws IOException
+	 */
+	public void connect() throws IOException {
+		//. TODO set connected to false on certain errors (e.g. timeouts)
+		logger.debug("Connecting to {}", name);
+		if (!connected) {
+			interfaceConnection.connect();
+			connected = true;
+		}
+	}
+	/**
+	 * Constructs CommandInterface using connectionProperties from JSON
+	 * @throws IOException
+	 */
 	private void createCommandInterface() throws IOException {  //. TODO private?
 		//. a separate configuration file for the interface might not be necessary
 		//. but the interface needs to be set up with param/command maps, etc.
@@ -100,195 +150,11 @@ public class Commander {
 			setCommandInterface(serialCI);
 		}
 	}
-	public static Commander getCommanderObject(String path) throws IOException, InvalidConfigurationException{
-		String jsonFilePath = path; 
-		Gson gson = new Gson();
-		FileReader fr = new FileReader(jsonFilePath);
-		Commander cmdr = gson.fromJson(fr, Commander.class);
-		cmdr.setLogger(cmdr.getName());
-		cmdr.validate();		
-		cmdr.createCommandInterface();
-		return cmdr;
-	}
-	
-	public CommandInterface getCommandInterface() {
-		return interfaceConnection;
-	}
-	
-	private void setCommandInterface(CommandInterface ci) {
-		interfaceConnection = ci;
-	}
-	
-	//. TODO set connected to false on certain errors (e.g. timeouts)
-	public void connect() throws IOException {
-		logger.debug("Connecting to {}", name);
-		if (!connected) {
-			interfaceConnection.connect();
-			connected = true;
-		}
-	}
-	
-	public void disconnect() throws IOException {
-		if (connected) {
-			logger.debug("Disconnecting from {}", name);
-			interfaceConnection.disconnect();
-			connected = false;
-		}
-	}
-	
-	
 	/**
-	 * Returns the command object using the key
-	 * @param key
-	 * @return
+	 * Internal method to convert Java Formatter format for Date/Calendar to regular expression  
+	 * @param Java formatter style String for Date/Calendar
+	 * @return Regular expression style String for Date/Calendar
 	 */
-	public Command getCommandObject(String key) throws InvalidCommandException {
-		Command cmd = commandMap.get(key);
-		if (cmd == null) {
-			throw new InvalidCommandException("Command \"" + key + "\" was not found in configuration.");		
-		}
-		return cmd;
-	}		
-		
-	private Object submit(String commandKey, Parameter[] parameters) throws InvalidCommandException, InvalidParameterException, IOException, InvalidOutputException, InvalidConfigurationException{
-		Object response;
-		logger.debug("Submitting command {}", commandKey);
-		Command cmd = getCommandObject(commandKey);
-					
-		if (cmd.isRequest()|| getSadRegex(cmd)!= null) {
-			response = interfaceConnection.sendRequest(cmd.getCommand(), parameters);
-			if (response instanceof String) {
-				//logger.debug("Response to " + cmdString + "\n" + response.toString());
-				//. TODO: use formatOutputObject regardless of return type.  parse into multiple objects if necessary
-				return formatOutputObject(cmd, response.toString());
-			} else {
-				ArrayList<Object> ret = new ArrayList<Object>();
-				ret.add(response);
-				return ret;
-			}
-		} else {
-			interfaceConnection.sendCommand(cmd.getCommand(), parameters);
-			return null;
-		}
-	}
-	
-	public Object submit(String commandKey, String[] parameters) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException {
-		
-		if (!connected) {
-			throw new IOException("Not connected to " + name +".");
-		}
-			
-		Command cmd = getCommandObject(commandKey);
-		Parameter[] paramObjects = new Parameter[0];
-		ArrayList<String> pkeylist = cmd.getParamKeyList();
-		
-		if (pkeylist.size() != 0) {
-			paramObjects = new Parameter[pkeylist.size()]; 
-						
-			if (pkeylist.size() != parameters.length) {
-				throw new InvalidParameterException("Number of parameters does not match. " + pkeylist.size() + " required, " + parameters.length + " entered: " + cmd.getParamKeyList());
-			}
-			
-			for (int ii = 0; ii<pkeylist.size();ii++) {
-				ParameterDefinition pdef = getParamDef(pkeylist.get(ii));
-				if (pdef==null) {
-					throw new InvalidParameterException("Parameter "+pkeylist.get(ii)+" is not found in configuration.");
-				}
-				String s = parameters[ii];	
-				paramObjects[ii] = pdef.getParameterFromString(s);				
-			}		
-		}
-		
-		return submit(commandKey,paramObjects);
-	}
-	public Object submit(String commandKey, Object[] parameters) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException {
-		if (!connected) {
-			throw new IOException("Not connected to " + name +".");
-		}
-			
-		Command cmd = getCommandObject(commandKey);
-		Parameter[] paramObjects = new Parameter[0];
-		ArrayList<String> pkeylist = cmd.getParamKeyList();
-		
-		if (pkeylist.size()!=0) {
-			paramObjects = new Parameter[pkeylist.size()]; 
-						
-			if (pkeylist.size() != parameters.length) {
-				throw new InvalidParameterException("Number of parameters does not match. " + pkeylist.size() + " required, " + parameters.length + " entered: " + cmd.getParamKeyList());
-			}
-			
-			for (int ii = 0; ii<pkeylist.size();ii++) {
-				ParameterDefinition pdef = getParamDef(pkeylist.get(ii));
-				if (pdef==null) {
-					throw new InvalidParameterException("Parameter "+pkeylist.get(ii)+" is not found in configuration.");
-				}
-				Object o = parameters[ii];	
-				paramObjects[ii] = pdef.getParameterFromObject(o);				
-			}		
-		}
-		
-		return submit(commandKey,paramObjects);
-	}
-	public Object submit(String command, String parameters) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException {
-		if (parameters.length()==0) {
-			return submit(command,new String[]{});
-		} else {
-			String[] array = parameters.split(",\\s*");
-			return submit(command,array);	
-		}
-		
-	}
-	public Object submit(String command) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException {
-		return submit(command, new String[]{});
-	}
-	
-
-	/** 
-	 * Returns the name of the Hardware
-	 * @return
-	 */
-	public String getName() {return name;}
-
-	/**
-	 * returns the parameter object using the key
-	 * @param key
-	 * @return
-	 * @throws InvalidParameterException 
-	 */
-	public ParameterDefinition getParamDef(String key) throws InvalidParameterException{
-		if (paramDefMap.containsKey(key)) {
-			return paramDefMap.get(key);
-		} else if (defaultParamDefMap.containsKey(key)) {
-			return defaultParamDefMap.get(key);
-		} else {
-			throw new InvalidParameterException(String.format("Parameter with name of %s was not found from maps.",key));
-		}
-	}
-	
-	private String getHappyRegex(Command cmd) throws InvalidCommandException, InvalidParameterException{
-		if(cmd.getHappyRegex()== null || cmd.getHappyRegex().equals("")) {
-			String happy = cmd.getResponseFormat();
-			ArrayList<String> rlist = cmd.getResponseList();
-			for(int ii = 0; ii<rlist.size(); ii++){
-				ParameterDefinition p;
-				try {
-					p = getParamDef(rlist.get(ii));
-				} catch (InvalidParameterException e) {
-					throw new InvalidParameterException("For " + cmd.getName() +": "+ e.getMessage());
-				}
-				String regex;
-				if (p.getType().equalsIgnoreCase("date")) {
-					regex = dateformat2regex(p.getParamFormat());
-				} else {
-					regex = happyRegularExpressions.get(p.getType());
-				}
-				happy = happy.replace("("+rlist.get(ii)+")", regex);
-			}
-			cmd.setHappyRegex(happy);
-		}
-		return cmd.getHappyRegex();
-	}
-	
 	private String dateformat2regex(String format) {
 		String dateformat = format;
 		dateformat = dateformat.replaceAll("%tY","\\\\d{4}");	// 4-digit year
@@ -311,15 +177,29 @@ public class Commander {
 		System.out.println("dateformat" + dateformat);
 		return "(" + dateformat + ")";
 	}
-	
-	private String getSadRegex(Command cmd) throws InvalidCommandException{
-		if (cmd.getSadRegex() == null || cmd.getSadRegex().equals("")) {
-			cmd.setSadRegex(deviceSadRegex);
-		} 
-		return cmd.getSadRegex();
+	/**
+	 * Disconnect from the device
+	 * @throws IOException
+	 */
+	public void disconnect() throws IOException {
+		if (connected) {
+			logger.debug("Disconnecting from {}", name);
+			interfaceConnection.disconnect();
+			connected = false;
+		}
 	}
-		
-	// TODO unknown number of outputs?!
+	/**
+	 * Parse the response(assumed to be in String) from the hardware, and convert them into Java Objects.
+	 * In case of response with multiple values, It will return ArrayList of Java Objects
+	 * In case of response with multi-line response, It will return ArrayList of ArrayList of Java Objects.
+	 * @param Command to be used as reference while parsing output
+	 * @param Raw String response from the hardware
+	 * @return Parsed response
+	 * @throws InvalidParameterException
+	 * @throws InvalidOutputException
+	 * @throws InvalidCommandException
+	 * @throws InvalidConfigurationException
+	 */
 	private Object formatOutputObject(Command cmd, String response) throws InvalidParameterException, InvalidOutputException, InvalidCommandException, InvalidConfigurationException{
 		logger.debug("Parsing output");
 		ArrayList<Object> outArray = new ArrayList<Object>();
@@ -427,7 +307,111 @@ public class Commander {
 			return multiArray;
 		}
 	}
-	
+	/**
+	 * Returns CommandInterface of the Commander
+	 * @return CommandInterface of the Commander
+	 */
+	public CommandInterface getCommandInterface() {
+		return interfaceConnection;
+	}
+	/**
+	 * Returns HashMap of Commands with their name as the key
+	 * @return HashMap of Commands
+	 */
+	public HashMap<String,Command> getCommandMap() {
+		return commandMap;
+	}		
+	/**
+	 * Returns the Command object using the key
+	 * @param name(key) of the Command
+	 * @return Command with the name passed in
+	 */
+	public Command getCommandObject(String key) throws InvalidCommandException {
+		Command cmd = commandMap.get(key);
+		if (cmd == null) {
+			throw new InvalidCommandException("Command \"" + key + "\" was not found in configuration.");		
+		}
+		return cmd;
+	}
+	/**
+	 * Acquire successful regular expression for the Command passed in as Parameter
+	 * For the first call, Command itself wouldn't have happyRegex ready. 
+	 * In this case, construct happyRegex using responseFormat of the same Command.
+	 * Reason for this is that Command does not know of the paramDefMap.
+	 * @param Command which the happyRegex is requested of
+	 * @return Regular expression of successful response.
+	 * @throws InvalidCommandException
+	 * @throws InvalidParameterException
+	 */
+	private String getHappyRegex(Command cmd) throws InvalidCommandException, InvalidParameterException{
+		if(cmd.getHappyRegex()== null || cmd.getHappyRegex().equals("")) {
+			String happy = cmd.getResponseFormat();
+			ArrayList<String> rlist = cmd.getResponseList();
+			for(int ii = 0; ii<rlist.size(); ii++){
+				ParameterDefinition p;
+				try {
+					p = getParamDef(rlist.get(ii));
+				} catch (InvalidParameterException e) {
+					throw new InvalidParameterException("For " + cmd.getName() +": "+ e.getMessage());
+				}
+				String regex;
+				if (p.getType().equalsIgnoreCase("date")) {
+					regex = dateformat2regex(p.getParamFormat());
+				} else {
+					regex = happyRegularExpressions.get(p.getType());
+				}
+				happy = happy.replace("("+rlist.get(ii)+")", regex);
+			}
+			cmd.setHappyRegex(happy);
+		}
+		return cmd.getHappyRegex();
+	}
+	/** 
+	 * Returns the name of the Hardware
+	 * @return
+	 */
+	public String getName() {return name;}
+	/**
+	 * returns the ParameterDefinition object using the key
+	 * @param Name(key) of the ParameterDefinition
+	 * @return ParameterDefinition
+	 * @throws InvalidParameterException 
+	 */
+	public ParameterDefinition getParamDef(String key) throws InvalidParameterException{
+		if (paramDefMap.containsKey(key)) {
+			return paramDefMap.get(key);
+		} else if (defaultParamDefMap.containsKey(key)) {
+			return defaultParamDefMap.get(key);
+		} else {
+			throw new InvalidParameterException(String.format("Parameter with name of %s was not found from maps.",key));
+		}
+	}
+	/**
+	 * Returns HashMap of ParameterDefinitions with their name as the key
+	 * @return HashMap of ParameterDefinitions
+	 */
+	public HashMap<String,ParameterDefinition> getParamDefMap() {
+		return paramDefMap;
+	}
+	/**
+	 * Acquire failure regular expression for the Command passed in as Parameter
+	 * In a case that command does not have command-specific sadRegex, set it to be same as the deviceSadRegex
+	 * @param Command which the sadRegex is requested of
+	 * @return Regular expression of failure response.
+	 * @throws InvalidCommandException
+	 * @throws InvalidParameterException
+	 */
+	private String getSadRegex(Command cmd) throws InvalidCommandException{
+		if (cmd.getSadRegex() == null || cmd.getSadRegex().equals("")) {
+			cmd.setSadRegex(deviceSadRegex);
+		} 
+		return cmd.getSadRegex();
+	}
+	/**
+	 * In case some changes are made for the Commander, (i.e. change in CommanderInterface) save the new Commander as JSON on given path.
+	 * @param Path for the JSON configuration file to be saved
+	 * @throws IOException
+	 */
 	public void saveConfig(String path) throws IOException{
 		Gson gson = new GsonBuilder().setPrettyPrinting().excludeFieldsWithModifiers(Modifier.TRANSIENT).create();
 		FileWriter writer = new FileWriter(path);
@@ -435,7 +419,28 @@ public class Commander {
 		writer.write(json);
 		writer.close();
 	}
+	/**
+	 * Sets the CommandInterface with the one passed in as parameter.
+	 * @param CommanderInterface
+	 */
+	private void setCommandInterface(CommandInterface ci) {
+		interfaceConnection = ci;
+	}
 	
+	/**
+	 * Setting logger name and default log level for the Commander
+	 * @param Name of the logger to be displayed
+	 * @param Default log level for this Commander
+	 */
+	public void setLogger(String loggerName, String loglevel) {
+		logger= LogManager.getLogger(loggerName);
+		setLogLevel(loglevel);
+		logger.debug("Logger has been prepared");
+	}
+	/**
+	 * Make it available to set the log level even after the construction.
+	 * @param Log level
+	 */
 	public void setLogLevel(String l) {
 		LoggerContext context = (LoggerContext) LogManager.getContext(false);
 		Configuration config = context.getConfiguration();
@@ -450,14 +455,163 @@ public class Commander {
 		else if (l.equalsIgnoreCase("off")) {	loggerConfig.setLevel(Level.OFF);}
 		context.updateLoggers();
 	}
-	public HashMap<String,Command> getCommandMap() {
-		return commandMap;
+	/**
+	 * Submit method for Command that does not expect any response.
+	 * Pass in empty Parameter Array as argument.
+	 * @param Command name
+	 * @return Since there will be no response, it would return null.
+	 * @throws InvalidParameterException
+	 * @throws InvalidCommandException
+	 * @throws IOException
+	 * @throws InvalidOutputException
+	 * @throws InvalidConfigurationException
+	 */
+	public Object submit(String command) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException {
+		return submit(command, new Parameter[]{});
 	}
-	public HashMap<String,ParameterDefinition> getParamDefMap() {
-		return paramDefMap;
-	}
-
 	
+	/**
+	 * Wrapper method of the core submit method.
+	 * Takes arguments as array of Object(Integer, Double, etc.), convert the strings as Parameters using parameter list of the Command.
+	 * @param Name of the command that will be submitted
+	 * @param Array of Object arguments that is required for Command
+	 * @return Object, ArrayList of Object, or ArrayList of ArrayList of Object(for multiple line response)
+	 * @throws InvalidParameterException
+	 * @throws InvalidCommandException
+	 * @throws IOException
+	 * @throws InvalidOutputException
+	 * @throws InvalidConfigurationException
+	 */
+	public Object submit(String commandKey, Object[] parameters) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException {
+		if (!connected) {
+			throw new IOException("Not connected to " + name +".");
+		}
+			
+		Command cmd = getCommandObject(commandKey);
+		Parameter[] paramObjects = new Parameter[0];
+		ArrayList<String> pkeylist = cmd.getParamKeyList();
+		
+		if (pkeylist.size()!=0) {
+			paramObjects = new Parameter[pkeylist.size()]; 
+						
+			if (pkeylist.size() != parameters.length) {
+				throw new InvalidParameterException("Number of parameters does not match. " + pkeylist.size() + " required, " + parameters.length + " entered: " + cmd.getParamKeyList());
+			}
+			
+			for (int ii = 0; ii<pkeylist.size();ii++) {
+				ParameterDefinition pdef = getParamDef(pkeylist.get(ii));
+				if (pdef==null) {
+					throw new InvalidParameterException("Parameter "+pkeylist.get(ii)+" is not found in configuration.");
+				}
+				Object o = parameters[ii];	
+				paramObjects[ii] = pdef.getParameterFromObject(o);				
+			}		
+		}
+		
+		return submit(commandKey,paramObjects);
+	}
+	
+	/**
+	 * Core submit method. Takes name of Command and Array of Parameters and parse it as how device would take
+	 * If the command is query type, it will read the response from the device and parse as 
+	 * Object, ArrayList of Object, or ArrayList of ArrayList of Object(for multiple line response)
+	 * Otherwise, It will just dump the command to the device.
+	 * @param Name of the command that will be submitted
+	 * @param Array of Parameter arguments that is required for Command
+	 * @return Object, ArrayList of Object, or ArrayList of ArrayList of Object(for multiple line response)
+	 * @throws InvalidCommandException
+	 * @throws InvalidParameterException
+	 * @throws IOException
+	 * @throws InvalidOutputException
+	 * @throws InvalidConfigurationException
+	 */
+	private Object submit(String commandKey, Parameter[] parameters) throws InvalidCommandException, InvalidParameterException, IOException, InvalidOutputException, InvalidConfigurationException{
+		Object response;
+		logger.debug("Submitting command {}", commandKey);
+		Command cmd = getCommandObject(commandKey);
+					
+		if (cmd.isRequest()|| getSadRegex(cmd)!= null) {
+			response = interfaceConnection.sendRequest(cmd.getCommand(), parameters);
+			if (response instanceof String) {
+				//logger.debug("Response to " + cmdString + "\n" + response.toString());
+				//. TODO: use formatOutputObject regardless of return type.  parse into multiple objects if necessary
+				return formatOutputObject(cmd, response.toString());
+			} else {
+				ArrayList<Object> ret = new ArrayList<Object>();
+				ret.add(response);
+				return ret;
+			}
+		} else {
+			interfaceConnection.sendCommand(cmd.getCommand(), parameters);
+			return null;
+		}
+	}
+	/**
+	 * Wrapper method of the String arguments submit method.
+	 * Takes arguments as String, and splits the string using comma as delimiter..
+	 * @param Name of the command that will be submitted
+	 * @param String representation of arguments separated by commas
+	 * @return Object, ArrayList of Object, or ArrayList of ArrayList of Object(for multiple line response)
+	 * @throws InvalidParameterException
+	 * @throws InvalidCommandException
+	 * @throws IOException
+	 * @throws InvalidOutputException
+	 * @throws InvalidConfigurationException
+	 */
+	public Object submit(String command, String parameters) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException {
+		if (parameters.length()==0) {
+			return submit(command,new String[]{});
+		} else {
+			String[] array = parameters.split(",\\s*");
+			return submit(command,array);	
+		}
+		
+	}
+	/**
+	 * Wrapper method of the core submit method.
+	 * Takes arguments as array of String, convert the strings as Parameters using parameter list of the Command.
+	 * @param Name of the command that will be submitted
+	 * @param Array of String arguments that is required for Command
+	 * @return Object, ArrayList of Object, or ArrayList of ArrayList of Object(for multiple line response)
+	 * @throws InvalidParameterException
+	 * @throws InvalidCommandException
+	 * @throws IOException
+	 * @throws InvalidOutputException
+	 * @throws InvalidConfigurationException
+	 */
+	public Object submit(String commandKey, String[] parameters) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException {
+		
+		if (!connected) {
+			throw new IOException("Not connected to " + name +".");
+		}
+			
+		Command cmd = getCommandObject(commandKey);
+		Parameter[] paramObjects = new Parameter[0];
+		ArrayList<String> pkeylist = cmd.getParamKeyList();
+		
+		if (pkeylist.size() != 0) {
+			paramObjects = new Parameter[pkeylist.size()]; 
+						
+			if (pkeylist.size() != parameters.length) {
+				throw new InvalidParameterException("Number of parameters does not match. " + pkeylist.size() + " required, " + parameters.length + " entered: " + cmd.getParamKeyList());
+			}
+			
+			for (int ii = 0; ii<pkeylist.size();ii++) {
+				ParameterDefinition pdef = getParamDef(pkeylist.get(ii));
+				if (pdef==null) {
+					throw new InvalidParameterException("Parameter "+pkeylist.get(ii)+" is not found in configuration.");
+				}
+				String s = parameters[ii];	
+				paramObjects[ii] = pdef.getParameterFromString(s);				
+			}		
+		}
+		
+		return submit(commandKey,paramObjects);
+	}
+	/**
+	 * Validates the configuration files by validating each HashMaps(connectionProperties, commandMap, paramDefMap).
+	 * @throws InvalidConfigurationException
+	 */
 	private void validate() throws InvalidConfigurationException{
 		//Commander field validate
 		logger.debug("Validating JSON config");
