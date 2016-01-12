@@ -1,26 +1,19 @@
 package edu.ucla.astro.irlab.io.socket;
 
 import java.io.BufferedReader;
-import java.io.Flushable;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.Writer;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
-import java.util.Arrays;
 import java.util.HashMap;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import edu.ucla.astro.irlab.io.CommandInterface;
-import edu.ucla.astro.irlab.io.InvalidConfigurationException;
-import edu.ucla.astro.irlab.io.InvalidOutputException;
 import edu.ucla.astro.irlab.io.Parameter;
 import edu.ucla.astro.irlab.io.PositionalSyntaxCommandConstructor;
 //TODO separate TCP and UDP
@@ -185,16 +178,16 @@ public class TCPCommandInterface implements CommandInterface {
 		int temp;
 		logger.debug("Reading until terminator is reached.");
 		while (line.indexOf(responseTerminator) == -1 || line.indexOf(responseTerminator) == 0 ) {
+			// There were some occasion that terminator was read multiple times
+			// before actual response was read. to avoid this,
+			// if the terminator is the first characters read, empty the buffer
+			// so it won't cause the loop to exit.
 			if (line.indexOf(responseTerminator)==0) {
 				line.delete(0, responseTerminator.length());
 			}
 			temp = in.read();
 			line.append((char) temp);
-			int index = line.indexOf(responseTerminator);
-			// There were some occasion that terminator was read multiple times
-			// before actual response was read. to avoid this,
-			// if the terminator is the first characters read, empty the buffer
-			// so it won't cause the loop to exit.
+
 		}
 		return line.toString();
 	}

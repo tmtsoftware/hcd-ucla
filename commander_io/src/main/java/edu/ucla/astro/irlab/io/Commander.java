@@ -200,7 +200,7 @@ public class Commander {
 	 * @throws InvalidCommandException
 	 * @throws InvalidConfigurationException
 	 */
-	private Object formatOutputObject(Command cmd, String response) throws InvalidParameterException, InvalidOutputException, InvalidCommandException, InvalidConfigurationException{
+	private Object formatOutputObject(Command cmd, String response) throws InvalidParameterException, InvalidCommandException, InvalidConfigurationException{
 		logger.debug("Parsing output");
 		ArrayList<Object> outArray = new ArrayList<Object>();
 		ArrayList<ArrayList<Object>> multiArray = new ArrayList<ArrayList<Object>>();
@@ -223,7 +223,7 @@ public class Commander {
 		} else if (sadformat!=null) {
 			caseNum = 2;
 		} else {
-			throw new InvalidOutputException(String.format("Command \"%s\" does not have any response configured", cmd.getName()));
+			throw new InvalidConfigurationException(String.format("Command \"%s\" does not have any response configured", cmd.getName()));
 		}
 
 		if (caseNum == 0 || caseNum ==1) {
@@ -295,7 +295,7 @@ public class Commander {
 			}
 		}
 		if (multiArray.size()==0) {
-			throw new InvalidOutputException("Was not able to parse output for " + cmd.getName() + ".");
+			throw new InvalidConfigurationException("Was not able to parse output for " + cmd.getName() + ".");
 		}if (multiArray.size()==1) {
 			ArrayList<Object> onlyArray = multiArray.get(0);
 			if (onlyArray.size()==1) {
@@ -466,7 +466,7 @@ public class Commander {
 	 * @throws InvalidOutputException
 	 * @throws InvalidConfigurationException
 	 */
-	public Object submit(String command) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException {
+	public Object submit(String command) throws InvalidParameterException, InvalidCommandException, IOException, InvalidConfigurationException {
 		return submit(command, new Parameter[]{});
 	}
 	
@@ -482,7 +482,7 @@ public class Commander {
 	 * @throws InvalidOutputException
 	 * @throws InvalidConfigurationException
 	 */
-	public Object submit(String commandKey, Object[] parameters) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException {
+	public Object submit(String commandKey, Object[] parameters) throws InvalidParameterException, InvalidCommandException, IOException, InvalidConfigurationException {
 		if (!connected) {
 			throw new IOException("Not connected to " + name +".");
 		}
@@ -525,7 +525,7 @@ public class Commander {
 	 * @throws InvalidOutputException
 	 * @throws InvalidConfigurationException
 	 */
-	private Object submit(String commandKey, Parameter[] parameters) throws InvalidCommandException, InvalidParameterException, IOException, InvalidOutputException, InvalidConfigurationException{
+	private Object submit(String commandKey, Parameter[] parameters) throws InvalidCommandException, InvalidParameterException, IOException, InvalidConfigurationException{
 		Object response;
 		logger.debug("Submitting command {}", commandKey);
 		Command cmd = getCommandObject(commandKey);
@@ -558,7 +558,7 @@ public class Commander {
 	 * @throws InvalidOutputException
 	 * @throws InvalidConfigurationException
 	 */
-	public Object submit(String command, String parameters) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException {
+	public Object submit(String command, String parameters) throws InvalidParameterException, InvalidCommandException, IOException, InvalidConfigurationException {
 		if (parameters.length()==0) {
 			return submit(command,new String[]{});
 		} else {
@@ -579,7 +579,7 @@ public class Commander {
 	 * @throws InvalidOutputException
 	 * @throws InvalidConfigurationException
 	 */
-	public Object submit(String commandKey, String[] parameters) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException {
+	public Object submit(String commandKey, String[] parameters) throws InvalidParameterException, InvalidCommandException, IOException, InvalidConfigurationException {
 		
 		if (!connected) {
 			throw new IOException("Not connected to " + name +".");

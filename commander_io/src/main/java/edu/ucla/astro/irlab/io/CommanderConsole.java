@@ -100,8 +100,6 @@ public class CommanderConsole {
 				System.out.println(e.getMessage());
 			} catch (InvalidCommandException e) {
 				System.out.println(e.getMessage());
-			} catch (InvalidOutputException e) {
-				System.out.println(e.getMessage());
 			} catch (InvalidConfigurationException e) {
 				System.out.println(e.getMessage());
 			}
@@ -139,7 +137,7 @@ public class CommanderConsole {
 		System.exit(0);
 	}
 		
-	private String process(String input) throws InvalidCommandException, InvalidParameterException, IOException, InvalidOutputException, InvalidConfigurationException{
+	private String process(String input) throws InvalidCommandException, InvalidParameterException, IOException, InvalidConfigurationException{
 		String[] inputArray = input.split(" ");
 		String key = inputArray[0];
 		String[] params = Arrays.copyOfRange(inputArray, 1, inputArray.length);
@@ -153,7 +151,7 @@ public class CommanderConsole {
 		}
 	}
 	
-	private String processCommand(String command,  String[] params) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException{
+	private String processCommand(String command,  String[] params) throws InvalidParameterException, InvalidCommandException, IOException, InvalidConfigurationException{
 		Object out = cmdr.submit(command, params);
 		if (out instanceof ArrayList<?>){
 			ArrayList<Object> outList =  (ArrayList<Object>)out;
@@ -181,7 +179,7 @@ public class CommanderConsole {
 		}
 	}
 	
-	private String processUtil(String util,  String[] params) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException{
+	private String processUtil(String util,  String[] params) throws InvalidParameterException, InvalidCommandException, IOException, InvalidConfigurationException{
 		if (util.equalsIgnoreCase("connect")){
 			cmdr.connect();
 			return "Connected";
@@ -226,7 +224,7 @@ public class CommanderConsole {
 		}
 	}
 
-	private String setConfig(String configjsonpath) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException {
+	private String setConfig(String configjsonpath) throws InvalidParameterException, InvalidCommandException, IOException, InvalidConfigurationException {
 		Gson gson  = new Gson();
 		FileReader fr;
 		
@@ -241,7 +239,7 @@ public class CommanderConsole {
 		return "Config Setting Compeleted";
 	}
 	
-	private String confirmConfig(String configjsonpath) throws InvalidParameterException, InvalidCommandException, IOException, InvalidOutputException, InvalidConfigurationException {
+	private String confirmConfig(String configjsonpath) throws InvalidParameterException, InvalidCommandException, IOException, InvalidConfigurationException {
 		Boolean pass = true;
 		String failedList = "";
 		Gson gson  = new Gson();

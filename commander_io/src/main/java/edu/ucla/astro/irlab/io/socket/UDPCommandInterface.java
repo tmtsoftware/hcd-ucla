@@ -19,7 +19,6 @@ import org.apache.logging.log4j.Logger;
 
 import edu.ucla.astro.irlab.io.CommandInterface;
 import edu.ucla.astro.irlab.io.InvalidConfigurationException;
-import edu.ucla.astro.irlab.io.InvalidOutputException;
 import edu.ucla.astro.irlab.io.Parameter;
 import edu.ucla.astro.irlab.io.PositionalSyntaxCommandConstructor;
 //TODO separate TCP and UDP
